@@ -13,7 +13,7 @@ export function formatDual(amount: number): string {
   return `${formatUSD(amount)} (${formatKHR(amount)})`;
 }
 
-export function formatAmount(amount: number, mode: 'usd' | 'dual' = 'usd'): string {
-  if (mode === 'dual') return formatDual(amount);
+export function formatAmount(amount: number, mode: 'usd' | 'khr' = 'usd'): string {
+  if (mode === 'khr') return formatKHR(amount);
   return formatUSD(amount);
 }

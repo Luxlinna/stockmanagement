@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { formatUSD, formatDual } from '@/lib/currency';
+import { createContext, useContext, useState, type ReactNode } from 'react';
+import { formatUSD, formatKHR } from '@/lib/currency';
 
-type DisplayMode = 'usd' | 'dual';
+type DisplayMode = 'usd' | 'khr';
 
 interface CurrencyContextType {
   displayMode: DisplayMode;
@@ -17,22 +17,18 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [displayMode, setDisplayModeState] = useState<DisplayMode>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === 'usd' || stored === 'dual') return stored;
+      if (stored === 'usd' || stored === 'khr') return stored;
     } catch { /* ignore */ }
     return 'usd';
   });
 
   const setDisplayMode = (mode: DisplayMode) => {
     setDisplayModeState(mode);
-    try {
-      localStorage.setItem(STORAGE_KEY, mode);
-    } catch { /* ignore */ }
+    try { localStorage.setItem(STORAGE_KEY, mode); } catch { /* ignore */ }
   };
 
-  const formatAmount = (amount: number): string => {
-    if (displayMode === 'dual') return formatDual(amount);
-    return formatUSD(amount);
-  };
+  const formatAmount = (amount: number): string =>
+    displayMode === 'khr' ? formatKHR(amount) : formatUSD(amount);
 
   return (
     <CurrencyContext.Provider value={{ displayMode, setDisplayMode, formatAmount }}>
