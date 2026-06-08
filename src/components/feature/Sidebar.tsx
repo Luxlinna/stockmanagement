@@ -186,7 +186,7 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
             title="Sign out"
           >
-            <i className="ri-logout-box-r-line text-sm"></i>
+            <i className="ri-door-open-line text-base"></i>
           </button>
         </div>
       </div>
