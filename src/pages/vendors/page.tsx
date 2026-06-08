@@ -3,6 +3,7 @@ import DashboardLayout from '@/components/feature/DashboardLayout';
 import { type Vendor } from '@/mocks/vendors';
 import VendorDetailModal from './components/VendorDetailModal';
 import { supabase } from '@/lib/supabase';
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 type FilterTab = 'all' | 'active' | 'inactive' | 'suspended';
 
@@ -94,6 +95,8 @@ export default function VendorsPage() {
     suspended: 'bg-red-50 text-red-600 border border-red-200',
   }[status]);
 
+  const { formatAmount } = useCurrency();
+
   return (
     <DashboardLayout title="Vendors" subtitle="Manage vendor profiles, performance metrics and product assignments">
       {loading && (
@@ -114,7 +117,7 @@ export default function VendorsPage() {
               { label: 'Active', value: kpi.active, icon: 'ri-checkbox-circle-line', color: 'text-emerald-600', bg: 'bg-emerald-50' },
               { label: 'Inactive', value: kpi.inactive, icon: 'ri-close-circle-line', color: 'text-gray-500', bg: 'bg-gray-100' },
               { label: 'Avg Fulfillment', value: `${kpi.avgFulfillment}%`, icon: 'ri-bar-chart-2-line', color: 'text-sky-600', bg: 'bg-sky-50' },
-              { label: 'Total Purchase', value: `$${(kpi.totalValue / 1000).toFixed(0)}k`, icon: 'ri-money-dollar-circle-line', color: 'text-violet-600', bg: 'bg-violet-50' },
+              { label: 'Total Purchase', value: formatAmount(kpi.totalValue), icon: 'ri-money-dollar-circle-line', color: 'text-violet-600', bg: 'bg-violet-50' },
               { label: 'Products Managed', value: kpi.totalProducts, icon: 'ri-archive-line', color: 'text-amber-600', bg: 'bg-amber-50' },
             ].map((card) => (
               <div key={card.label} className="bg-white rounded-xl p-4 border border-gray-100">
@@ -229,7 +232,7 @@ export default function VendorsPage() {
                             />
                           </td>
                           <td className="px-4 py-3.5 text-right font-semibold text-gray-800">
-                            $${v.metrics.totalPurchaseValue.toLocaleString('en-US')}
+                            {formatAmount(v.metrics.totalPurchaseValue)}
                           </td>
                           <td className="px-4 py-3.5 text-center">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusBadge(v.status)} whitespace-nowrap`}>
@@ -312,7 +315,7 @@ export default function VendorsPage() {
                           <span className="mx-2 text-gray-300">·</span>
                           <span className="font-semibold text-gray-800">{v.metrics.totalOrders}</span> orders
                         </div>
-                        <p className="text-xs font-bold text-emerald-700">$${v.metrics.totalPurchaseValue.toLocaleString('en-US')}</p>
+                        <p className="text-xs font-bold text-emerald-700">{formatAmount(v.metrics.totalPurchaseValue)}</p>
                       </div>
                       <div className="flex flex-wrap gap-1 mt-3">
                         {v.tags.map((tag) => (

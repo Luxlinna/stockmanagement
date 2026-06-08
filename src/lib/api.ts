@@ -41,7 +41,8 @@ class QueryBuilder {
   private _filters: Array<[string, string]> = [];   // [col, "op.value"]
   private _orderCol: string | null = null;
   private _orderDir: 'asc' | 'desc' = 'asc';
-  private _limitN: number | null = null;
+  private _limitN:  number | null = null;
+  private _offsetN: number | null = null;
   private _single = false;
   private _maybeSingle = false;
   private _payload: unknown = null;
@@ -66,7 +67,8 @@ class QueryBuilder {
     return this;
   }
 
-  limit(n: number) { this._limitN = n; return this; }
+  limit(n: number)  { this._limitN = n;    return this; }
+  offset(n: number) { this._offsetN = n;   return this; }
   single()       { this._single = true;      return this; }
   maybeSingle()  { this._maybeSingle = true; return this; }
 
@@ -103,7 +105,8 @@ class QueryBuilder {
     p.set('select', this._cols);
     this._filters.forEach(([col, val]) => p.set(col, val));
     if (this._orderCol) p.set('order', `${this._orderCol}.${this._orderDir}`);
-    if (this._limitN !== null) p.set('limit', String(this._limitN));
+    if (this._limitN  !== null) p.set('limit',  String(this._limitN));
+    if (this._offsetN !== null) p.set('offset', String(this._offsetN));
     if (this._single) p.set('single', 'true');
     if (this._maybeSingle) p.set('maybeSingle', 'true');
     return p;

@@ -1,4 +1,5 @@
 import type { Vendor } from '@/mocks/vendors';
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 interface Props {
   vendor: Vendor;
@@ -23,6 +24,7 @@ function MetricBar({ value, max = 100, color = 'bg-emerald-500' }: { value: numb
 }
 
 export default function VendorDetailModal({ vendor, onClose }: Props) {
+  const { formatAmount } = useCurrency();
   const sc = statusConfig[vendor.status];
 
   return (
@@ -80,7 +82,7 @@ export default function VendorDetailModal({ vendor, onClose }: Props) {
             </div>
             <div className="bg-gray-50 rounded-lg p-3.5 text-center">
               <p className="text-xs text-gray-500 mb-1">Total Purchase Value</p>
-              <p className="text-lg font-bold text-gray-900">$${vendor.metrics.totalPurchaseValue.toLocaleString('en-US')}</p>
+              <p className="text-lg font-bold text-gray-900">{formatAmount(vendor.metrics.totalPurchaseValue)}</p>
             </div>
           </div>
 
@@ -153,7 +155,7 @@ export default function VendorDetailModal({ vendor, onClose }: Props) {
                               <span className="text-xs text-gray-600 font-medium w-8 text-right">{p.currentStock}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-right text-gray-600">$${p.unitCost.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right text-gray-600">{formatAmount(p.unitCost)}</td>
                           <td className="px-4 py-3 text-center">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadge} whitespace-nowrap`}>
                               {p.status.replace('_', ' ')}

@@ -307,7 +307,6 @@ export default function NotificationSettingsPage() {
       notification_type: ruleForm.notification_type,
       message_template: ruleForm.message_template.trim(),
       is_active: ruleForm.is_active,
-      created_by: user.id,
     };
 
     let error;
@@ -389,7 +388,6 @@ export default function NotificationSettingsPage() {
     if (!user || !isAdmin) return;
 
     const payload = {
-      user_id: user.id,
       name: webhookForm.name,
       provider: webhookForm.provider,
       webhook_url: webhookForm.webhook_url,

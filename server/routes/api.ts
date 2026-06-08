@@ -95,7 +95,8 @@ router.get('/:table', optionalAuth, async (req: AuthRequest, res) => {
     const [col, dir] = q.order.split('.');
     sql += ` ORDER BY "${col}" ${dir === 'desc' ? 'DESC' : 'ASC'}`;
   }
-  if (q.limit) sql += ` LIMIT ${Math.abs(parseInt(q.limit, 10))}`;
+  if (q.limit)  sql += ` LIMIT ${Math.abs(parseInt(q.limit, 10))}`;
+  if (q.offset) sql += ` OFFSET ${Math.abs(parseInt(q.offset, 10))}`;
 
   try {
     const result = await pool.query(sql, values);

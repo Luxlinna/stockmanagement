@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import DashboardLayout from '@/components/feature/DashboardLayout';
 import { type PurchaseOrder, type PurchaseStatus } from '@/mocks/purchases';
 import PurchaseStatusBadge from './components/PurchaseStatusBadge';
@@ -43,6 +44,7 @@ function mapPurchase(row: Record<string, unknown>): PurchaseOrder {
 
 export default function PurchasesPage() {
   const { formatAmount } = useCurrency();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -54,6 +56,14 @@ export default function PurchasesPage() {
   useEffect(() => {
     fetchPurchases();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      setShowForm(true);
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const fetchPurchases = async () => {
     setLoading(true);

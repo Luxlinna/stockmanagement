@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import { generateKeyPairSync } from 'crypto';
 import { pool } from '../db';
 import { authenticate, AuthRequest } from '../middleware/auth';
 
@@ -57,6 +58,206 @@ router.post('/alert-rules-evaluator', async (_req, res) => {
     res.json({ total_created: totalCreated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /functions/v1/report-summary
+router.post('/report-summary', authenticate, async (req: AuthRequest, res) => {
+  const { period, date, month, year, warehouse } = req.body as {
+    period: 'daily' | 'monthly' | 'yearly';
+    date?: string;
+    month?: string;
+    year?: string;
+    warehouse?: string;
+  };
+
+  try {
+    let currPattern: string;
+    let prevPattern: string;
+    let trendItems: { label: string; pattern: string }[];
+
+    if (period === 'daily') {
+      const d = date || new Date().toISOString().slice(0, 10);
+      currPattern = d;
+      const prev = new Date(d); prev.setDate(prev.getDate() - 1);
+      prevPattern = prev.toISOString().slice(0, 10);
+      trendItems = Array.from({ length: 7 }, (_, i) => {
+        const day = new Date(d); day.setDate(day.getDate() - (6 - i));
+        return {
+          label: day.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+          pattern: day.toISOString().slice(0, 10),
+        };
+      });
+    } else if (period === 'monthly') {
+      currPattern = month || new Date().toISOString().slice(0, 7);
+      const [y, m] = currPattern.split('-').map(Number);
+      const prevDate = new Date(y, m - 2, 1);
+      prevPattern = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+      const yr = currPattern.slice(0, 4);
+      trendItems = Array.from({ length: 12 }, (_, i) => ({
+        label: new Date(Number(yr), i, 1).toLocaleDateString('en-US', { month: 'short' }),
+        pattern: `${yr}-${String(i + 1).padStart(2, '0')}`,
+      }));
+    } else {
+      currPattern = year || String(new Date().getFullYear());
+      prevPattern = String(Number(currPattern) - 1);
+      trendItems = Array.from({ length: 5 }, (_, i) => {
+        const yr = String(Number(currPattern) - (4 - i));
+        return { label: yr, pattern: yr };
+      });
+    }
+
+    const wh = warehouse || null;
+    const whClause = wh ? ' AND warehouse = $2' : '';
+    const whVals: string[] = wh ? [wh] : [];
+
+    const toMap = (rows: any[]): Record<string, number> => {
+      const m: Record<string, number> = {};
+      rows.forEach((r: any) => { m[r.status] = Number(r.c); });
+      return m;
+    };
+
+    const getSummary = async (pat: string) => {
+      const [ordRes, ordStRes, delRes, trnRes, trnStRes, purRes, purStRes, retRes, retStRes, proRes, proStRes] = await Promise.all([
+        pool.query(`SELECT COUNT(*) c, COALESCE(SUM(total),0) rev FROM orders WHERE created_at LIKE $1`, [`${pat}%`]),
+        pool.query(`SELECT status, COUNT(*) c FROM orders WHERE created_at LIKE $1 GROUP BY status`, [`${pat}%`]),
+        pool.query(`SELECT status, COUNT(*) c FROM deliveries WHERE TO_CHAR(created_at,'YYYY-MM-DD') LIKE $1${whClause} GROUP BY status`, [`${pat}%`, ...whVals]),
+        pool.query(`SELECT COUNT(*) c FROM transfers WHERE created_at LIKE $1`, [`${pat}%`]),
+        pool.query(`SELECT status, COUNT(*) c FROM transfers WHERE created_at LIKE $1 GROUP BY status`, [`${pat}%`]),
+        pool.query(`SELECT COUNT(*) c, COALESCE(SUM(total),0) tot FROM purchases WHERE created_at LIKE $1${whClause}`, [`${pat}%`, ...whVals]),
+        pool.query(`SELECT status, COUNT(*) c FROM purchases WHERE created_at LIKE $1${whClause} GROUP BY status`, [`${pat}%`, ...whVals]),
+        pool.query(`SELECT COUNT(*) c, COALESCE(SUM(refund_amount),0) ref FROM returns WHERE created_at LIKE $1${whClause}`, [`${pat}%`, ...whVals]),
+        pool.query(`SELECT status, COUNT(*) c FROM returns WHERE created_at LIKE $1${whClause} GROUP BY status`, [`${pat}%`, ...whVals]),
+        pool.query(`SELECT COUNT(*) c FROM promotions WHERE created_at LIKE $1`, [`${pat}%`]),
+        pool.query(`SELECT status, COUNT(*) c FROM promotions WHERE created_at LIKE $1 GROUP BY status`, [`${pat}%`]),
+      ]);
+      return {
+        orders:     { count: Number(ordRes.rows[0].c), revenue: Number(ordRes.rows[0].rev), statusBreakdown: toMap(ordStRes.rows) },
+        deliveries: { count: delRes.rows.reduce((s: number, r: any) => s + Number(r.c), 0), statusBreakdown: toMap(delRes.rows) },
+        transfers:  { count: Number(trnRes.rows[0].c), statusBreakdown: toMap(trnStRes.rows) },
+        purchases:  { count: Number(purRes.rows[0].c), total: Number(purRes.rows[0].tot), statusBreakdown: toMap(purStRes.rows) },
+        returns:    { count: Number(retRes.rows[0].c), refunded: Number(retRes.rows[0].ref), statusBreakdown: toMap(retStRes.rows) },
+        promotions: { count: Number(proRes.rows[0].c), statusBreakdown: toMap(proStRes.rows) },
+      };
+    };
+
+    const [current, previous, trend] = await Promise.all([
+      getSummary(currPattern),
+      getSummary(prevPattern),
+      Promise.all(trendItems.map(async ({ label, pattern }) => {
+        const r = await pool.query(
+          `SELECT COUNT(*) orders, COALESCE(SUM(total),0) revenue FROM orders WHERE created_at LIKE $1`,
+          [`${pattern}%`]
+        );
+        return { label, orders: Number(r.rows[0].orders), revenue: Number(r.rows[0].revenue) };
+      })),
+    ]);
+
+    res.json({ period, current, previous, trend });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /functions/v1/generate-vapid-keys  (admin only)
+router.post('/generate-vapid-keys', authenticate, (_req: AuthRequest, res) => {
+  try {
+    const { publicKey: pub, privateKey: priv } = generateKeyPairSync('ec', {
+      namedCurve: 'P-256',
+    });
+
+    const pubJwk = pub.export({ format: 'jwk' }) as Record<string, string>;
+    const privJwk = priv.export({ format: 'jwk' }) as Record<string, string>;
+
+    // Build 65-byte uncompressed point: 0x04 || x (32 bytes) || y (32 bytes)
+    const x = Buffer.from(pubJwk.x, 'base64url');
+    const y = Buffer.from(pubJwk.y, 'base64url');
+    const uncompressed = Buffer.concat([Buffer.from([0x04]), x, y]);
+
+    res.json({
+      publicKey: uncompressed.toString('base64url'),
+      privateKey: privJwk.d,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /functions/v1/webhook-dispatch  (admin only)
+router.post('/webhook-dispatch', authenticate, async (req: AuthRequest, res) => {
+  const { notification, config_ids } = req.body as {
+    notification: { id: string; type: string; title: string; message: string };
+    config_ids: string[];
+  };
+
+  if (!notification || !config_ids?.length) {
+    return res.status(400).json({ dispatched: false, error: 'Missing notification or config_ids' });
+  }
+
+  try {
+    const placeholders = config_ids.map((_: unknown, i: number) => `$${i + 1}`).join(',');
+    const { rows: configs } = await pool.query(
+      `SELECT * FROM webhook_configs WHERE id IN (${placeholders}) AND is_active = true`,
+      config_ids
+    );
+
+    const results: Array<{ id: string; name: string; success: boolean; status?: number; error?: string }> = [];
+
+    for (const config of configs) {
+      try {
+        let body: Record<string, unknown>;
+
+        if (config.provider === 'slack') {
+          body = { text: `*${notification.title}*\n${notification.message}` };
+        } else if (config.provider === 'discord') {
+          body = { content: `**${notification.title}**\n${notification.message}` };
+        } else if (config.provider === 'telegram') {
+          // webhook_url = https://api.telegram.org/bot{TOKEN}/sendMessage, secret_token = chat_id
+          body = {
+            chat_id: config.secret_token || '',
+            text: `*${notification.title}*\n${notification.message}`,
+            parse_mode: 'Markdown',
+          };
+        } else {
+          body = { notification };
+        }
+
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (config.secret_token && config.provider !== 'telegram' && config.provider !== 'discord') {
+          headers['Authorization'] = `Bearer ${config.secret_token}`;
+        }
+
+        const response = await fetch(config.webhook_url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+
+        results.push({ id: config.id, name: config.name, success: response.ok, status: response.status });
+      } catch (err: any) {
+        results.push({ id: config.id, name: config.name, success: false, error: err.message });
+      }
+    }
+
+    const dispatched = results.length > 0 && results.some((r) => r.success);
+    res.json({ dispatched, results });
+  } catch (err: any) {
+    res.status(500).json({ dispatched: false, error: err.message });
+  }
+});
+
+// POST /functions/v1/scheduled-dispatch  (authenticated)
+router.post('/scheduled-dispatch', authenticate, async (_req: AuthRequest, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE notifications SET is_emailed = true
+       WHERE is_emailed = false AND created_at > NOW() - INTERVAL '24 hours'
+       RETURNING id`
+    );
+    const count = result.rows.length;
+    res.json({ message: `Dispatched ${count} pending notification${count !== 1 ? 's' : ''}` });
+  } catch (err: any) {
+    res.status(500).json({ message: 'Dispatch failed: ' + err.message });
   }
 });
 

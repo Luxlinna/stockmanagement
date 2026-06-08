@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import DashboardLayout from '@/components/feature/DashboardLayout';
 import { type StockTransfer, type TransferStatus } from '@/mocks/transfers';
 import TransferStatusBadge from './components/TransferStatusBadge';
@@ -37,6 +38,7 @@ function mapTransfer(row: Record<string, unknown>): StockTransfer {
 }
 
 export default function TransfersPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -48,6 +50,14 @@ export default function TransfersPage() {
   useEffect(() => {
     fetchTransfers();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      setShowForm(true);
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const fetchTransfers = async () => {
     setLoading(true);

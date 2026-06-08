@@ -5,6 +5,7 @@ export interface Product {
   category: string;
   warehouse: 'BM Warehouse' | 'Vendor Warehouse';
   vendor?: string;
+  description?: string;
   stock: number;
   lowStockThreshold: number;
   price: number;
