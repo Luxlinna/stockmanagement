@@ -144,12 +144,31 @@ CREATE TABLE IF NOT EXISTS deliveries (
   id TEXT PRIMARY KEY,
   order_id TEXT NOT NULL,
   customer TEXT NOT NULL,
-  items INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'prepare' CHECK (status IN ('prepare','ready','in_transit','delivered')),
-  last_update TEXT NOT NULL DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI'),
+  email TEXT,
+  phone TEXT,
+  address TEXT,
   destination TEXT,
+  items INTEGER NOT NULL DEFAULT 0,
+  items_detail JSONB NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'prepare' CHECK (status IN ('prepare','ready','in_transit','delivered')),
+  carrier TEXT,
+  tracking_number TEXT,
+  warehouse TEXT,
+  estimated_delivery TEXT,
+  timeline JSONB NOT NULL DEFAULT '[]',
+  last_update TEXT NOT NULL DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Add new columns to existing tables (idempotent for Render re-deploys)
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS items_detail JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS carrier TEXT;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS tracking_number TEXT;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS warehouse TEXT;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS estimated_delivery TEXT;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS timeline JSONB NOT NULL DEFAULT '[]';
 
 -- TRANSFERS
 CREATE TABLE IF NOT EXISTS transfers (

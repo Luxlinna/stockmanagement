@@ -19,12 +19,42 @@ const OPS: Record<string, string> = {
 };
 const RESERVED = new Set(['select', 'order', 'limit', 'offset', 'single', 'maybeSingle', 'onConflict']);
 
+function parseOrFilter(orStr: string, startAt: number): { condition: string; values: unknown[] } {
+  const parts = orStr.split(',');
+  const orConds: string[] = [];
+  const orVals: unknown[] = [];
+  let idx = startAt;
+  for (const part of parts) {
+    const firstDot = part.indexOf('.');
+    if (firstDot === -1) continue;
+    const col = part.slice(0, firstDot);
+    const rest = part.slice(firstDot + 1);
+    const secondDot = rest.indexOf('.');
+    if (secondDot === -1) continue;
+    const op = rest.slice(0, secondDot);
+    const val = rest.slice(secondDot + 1);
+    if (!OPS[op]) continue;
+    orConds.push(`"${col}" ${OPS[op]} $${idx++}`);
+    orVals.push(val);
+  }
+  return { condition: orConds.length ? `(${orConds.join(' OR ')})` : '1=1', values: orVals };
+}
+
 function parseFilters(query: Record<string, string>, startAt = 1) {
   const conditions: string[] = [];
   const values: unknown[] = [];
   let i = startAt;
   for (const [key, raw] of Object.entries(query)) {
     if (RESERVED.has(key)) continue;
+    if (key === '__or__') {
+      const { condition, values: orVals } = parseOrFilter(raw, i);
+      if (orVals.length > 0) {
+        conditions.push(condition);
+        values.push(...orVals);
+        i += orVals.length;
+      }
+      continue;
+    }
     const m = /^(eq|neq|gte|lte|gt|lt|like|ilike)\.(.+)$/.exec(raw);
     if (!m) continue;
     const [, op, val] = m;

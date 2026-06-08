@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import DashboardLayout from '@/components/feature/DashboardLayout';
 import DeliveryStepTracker from './components/DeliveryStepTracker';
 import DeliveryDetailModal from './components/DeliveryDetailModal';
-import { deliveryRecords as initialDeliveries, DeliveryRecord, DeliveryStep } from '@/mocks/deliveries';
+import { DeliveryRecord, DeliveryStep } from '@/mocks/deliveries';
+import { supabase } from '@/lib/supabase';
 
 const stepIndex: Record<DeliveryStep, number> = { prepare: 0, ready: 1, in_transit: 2, delivered: 3 };
 
@@ -15,12 +16,45 @@ const statusConfig = {
 
 type FilterStatus = 'all' | DeliveryStep;
 
+function rowToRecord(row: any): DeliveryRecord {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    customer: row.customer,
+    email: row.email ?? '',
+    phone: row.phone ?? '',
+    address: row.address ?? '',
+    city: row.destination ?? '',
+    items: Array.isArray(row.items_detail) ? row.items_detail : [],
+    totalItems: row.items ?? 0,
+    status: row.status as DeliveryStep,
+    carrier: row.carrier ?? '',
+    trackingNumber: row.tracking_number ?? '',
+    warehouse: row.warehouse ?? '',
+    estimatedDelivery: row.estimated_delivery ?? '',
+    createdAt: row.last_update ?? '',
+    timeline: Array.isArray(row.timeline) ? row.timeline : [],
+  };
+}
+
 export default function DeliveriesPage() {
-  const [deliveries, setDeliveries] = useState<DeliveryRecord[]>(initialDeliveries);
+  const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryRecord | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from('deliveries')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && data) setDeliveries((data as any[]).map(rowToRecord));
+      setLoading(false);
+    })();
+  }, []);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -46,22 +80,23 @@ export default function DeliveriesPage() {
     delivered: deliveries.filter((d) => d.status === 'delivered').length,
   }), [deliveries]);
 
-  const handleAdvance = (id: string, nextStep: DeliveryStep, note: string) => {
+  const handleAdvance = async (id: string, nextStep: DeliveryStep, note: string) => {
     const now = new Date().toLocaleString('sv').replace('T', ' ').slice(0, 16);
+    const target = deliveries.find((d) => d.id === id);
+    if (!target) return;
+
+    const newTimeline = [...target.timeline, { step: nextStep, timestamp: now, note, completedBy: 'Admin' }];
+
+    await supabase
+      .from('deliveries')
+      .update({ status: nextStep, timeline: newTimeline, last_update: now })
+      .eq('id', id);
+
     setDeliveries((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
-        const updated: DeliveryRecord = {
-          ...d,
-          status: nextStep,
-          timeline: [
-            ...d.timeline,
-            { step: nextStep, timestamp: now, note, completedBy: 'Admin' },
-          ],
-        };
-        if (selectedDelivery?.id === id) {
-          setSelectedDelivery(updated);
-        }
+        const updated: DeliveryRecord = { ...d, status: nextStep, timeline: newTimeline };
+        if (selectedDelivery?.id === id) setSelectedDelivery(updated);
         return updated;
       })
     );
@@ -78,14 +113,12 @@ export default function DeliveriesPage() {
 
   return (
     <DashboardLayout title="Deliveries" subtitle="Track shipments, advance delivery stages, and confirm arrivals.">
-      {/* Toast */}
       {toast && (
         <div className="fixed top-5 right-5 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium bg-emerald-500 text-white shadow-lg">
           <i className="ri-check-line text-base"></i> {toast}
         </div>
       )}
 
-      {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {([
           { key: 'prepare', label: 'Preparing', value: counts.prepare },
@@ -112,9 +145,7 @@ export default function DeliveriesPage() {
         })}
       </div>
 
-      {/* Main Panel */}
       <div className="bg-white rounded-2xl">
-        {/* Toolbar */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-1 flex-wrap">
             {filterTabs.map((tab) => (
@@ -141,92 +172,93 @@ export default function DeliveriesPage() {
           </div>
         </div>
 
-        {/* Cards Grid */}
-        <div className="p-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((delivery) => {
-            const cfg = statusConfig[delivery.status];
-            const canAdvance = delivery.status !== 'delivered';
-            return (
-              <div key={delivery.id} className="border border-gray-100 rounded-xl p-4 hover:border-emerald-200 transition-all cursor-pointer group" onClick={() => setSelectedDelivery(delivery)}>
-                {/* Card header */}
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-gray-800">{delivery.orderId}</span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-gray-400">
+            <i className="ri-loader-4-line text-3xl animate-spin mr-2"></i>
+            <span className="text-sm">Loading deliveries…</span>
+          </div>
+        ) : (
+          <div className="p-5 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filtered.map((delivery) => {
+              const cfg = statusConfig[delivery.status];
+              const canAdvance = delivery.status !== 'delivered';
+              return (
+                <div key={delivery.id} className="border border-gray-100 rounded-xl p-4 hover:border-emerald-200 transition-all cursor-pointer group" onClick={() => setSelectedDelivery(delivery)}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-gray-800">{delivery.orderId}</span>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-700 mt-0.5">{delivery.customer}</p>
+                      <p className="text-xs text-gray-400">{delivery.city}</p>
                     </div>
-                    <p className="text-sm font-medium text-gray-700 mt-0.5">{delivery.customer}</p>
-                    <p className="text-xs text-gray-400">{delivery.city}</p>
+                    {canAdvance && (
+                      <div className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i className="ri-arrow-right-line text-emerald-600 text-sm"></i>
+                      </div>
+                    )}
+                    {!canAdvance && (
+                      <div className="w-7 h-7 flex items-center justify-center">
+                        <i className="ri-check-double-line text-emerald-500 text-lg"></i>
+                      </div>
+                    )}
                   </div>
-                  {canAdvance && (
-                    <div className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <i className="ri-arrow-right-line text-emerald-600 text-sm"></i>
+
+                  <div className="mb-4">
+                    <DeliveryStepTracker currentStatus={delivery.status} compact />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-3.5 h-3.5 flex items-center justify-center">
+                        <i className="ri-truck-line text-gray-400"></i>
+                      </div>
+                      <span>{delivery.carrier}</span>
+                      <span className="text-gray-300">·</span>
+                      <span className="font-mono">{delivery.trackingNumber}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-3.5 h-3.5 flex items-center justify-center">
+                        <i className="ri-box-3-line text-gray-400"></i>
+                      </div>
+                      <span>{delivery.totalItems} item{delivery.totalItems !== 1 ? 's' : ''}</span>
+                      <span className="text-gray-300">·</span>
+                      <span>{delivery.warehouse}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-3.5 h-3.5 flex items-center justify-center">
+                        <i className="ri-calendar-line text-gray-400"></i>
+                      </div>
+                      <span>Est. {delivery.estimatedDelivery}</span>
+                    </div>
+                  </div>
+
+                  {delivery.timeline.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-xs text-gray-400">
+                        <i className="ri-time-line mr-1"></i>
+                        Last: {delivery.timeline[delivery.timeline.length - 1].timestamp}
+                      </p>
                     </div>
                   )}
-                  {!canAdvance && (
-                    <div className="w-7 h-7 flex items-center justify-center">
-                      <i className="ri-check-double-line text-emerald-500 text-lg"></i>
-                    </div>
-                  )}
-                </div>
 
-                {/* Step tracker */}
-                <div className="mb-4">
-                  <DeliveryStepTracker currentStatus={delivery.status} compact />
-                </div>
-
-                {/* Details */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <div className="w-3.5 h-3.5 flex items-center justify-center">
-                      <i className="ri-truck-line text-gray-400"></i>
+                  <div className="mt-3">
+                    <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-400 rounded-full transition-all duration-500"
+                        style={{ width: `${((stepIndex[delivery.status] + 1) / 4) * 100}%` }}
+                      ></div>
                     </div>
-                    <span>{delivery.carrier}</span>
-                    <span className="text-gray-300">·</span>
-                    <span className="font-mono">{delivery.trackingNumber}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <div className="w-3.5 h-3.5 flex items-center justify-center">
-                      <i className="ri-box-3-line text-gray-400"></i>
-                    </div>
-                    <span>{delivery.totalItems} item{delivery.totalItems !== 1 ? 's' : ''}</span>
-                    <span className="text-gray-300">·</span>
-                    <span>{delivery.warehouse}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <div className="w-3.5 h-3.5 flex items-center justify-center">
-                      <i className="ri-calendar-line text-gray-400"></i>
-                    </div>
-                    <span>Est. {delivery.estimatedDelivery}</span>
+                    <p className="text-xs text-gray-400 mt-1">Step {stepIndex[delivery.status] + 1} of 4</p>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
 
-                {/* Timeline summary */}
-                {delivery.timeline.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-400">
-                      <i className="ri-time-line mr-1"></i>
-                      Last: {delivery.timeline[delivery.timeline.length - 1].timestamp}
-                    </p>
-                  </div>
-                )}
-
-                {/* Progress bar */}
-                <div className="mt-3">
-                  <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-400 rounded-full transition-all duration-500"
-                      style={{ width: `${((stepIndex[delivery.status] + 1) / 4) * 100}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">Step {stepIndex[delivery.status] + 1} of 4</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {filtered.length === 0 && (
+        {!loading && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400">
             <div className="w-12 h-12 flex items-center justify-center mb-3">
               <i className="ri-truck-line text-4xl"></i>
@@ -237,7 +269,7 @@ export default function DeliveriesPage() {
 
         <div className="px-6 py-3 border-t border-gray-50 flex items-center justify-between">
           <p className="text-xs text-gray-400">Showing {filtered.length} of {deliveries.length} deliveries</p>
-          <p className="text-xs text-gray-400">Last updated: 19 May 2026, 11:30</p>
+          <p className="text-xs text-gray-400">Last updated: {new Date().toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
         </div>
       </div>
 

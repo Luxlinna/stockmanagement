@@ -114,13 +114,27 @@ INSERT INTO orders (id, customer, email, phone, address, city, status, total, it
 ON CONFLICT (id) DO NOTHING;
 
 -- DELIVERIES
-INSERT INTO deliveries (id, order_id, customer, items, status, last_update, destination) VALUES
-  ('D001','ORD-2841','Zara Mitchell',3,'in_transit','2026-05-19 11:00','Kuala Lumpur, MY'),
-  ('D002','ORD-2839','Ahmed Al-Rashid',1,'ready','2026-05-19 09:30','Shah Alam, MY'),
-  ('D003','ORD-2838','Priya Nair',5,'delivered','2026-05-19 08:45','Petaling Jaya, MY'),
-  ('D004','ORD-2843','Jason Tan',2,'prepare','2026-05-19 11:20','Subang Jaya, MY'),
-  ('D005','ORD-2842','Nurul Huda',4,'in_transit','2026-05-19 10:40','Cheras, MY')
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO deliveries (id, order_id, customer, email, phone, address, destination, items, items_detail, status, carrier, tracking_number, warehouse, estimated_delivery, timeline, last_update) VALUES
+  ('DEL-001','ORD-2841','Zara Mitchell','zara.mitchell@email.com','+60 12-345 6789','45, Jalan Ampang','Kuala Lumpur, MY',3,'[{"productName":"Wireless Bluetooth Headphones","sku":"WBH-001","quantity":2},{"productName":"Webcam 4K Ultra HD","sku":"WCM-008","quantity":1}]','in_transit','J&T Express','JT-MY-20260519-4821','BM Warehouse','2026-05-20','[{"step":"prepare","timestamp":"2026-05-19 09:00","note":"Order picked and packed at BM Warehouse.","completedBy":"Admin"},{"step":"ready","timestamp":"2026-05-19 10:30","note":"Package ready for handoff to carrier.","completedBy":"Admin"},{"step":"in_transit","timestamp":"2026-05-19 11:00","note":"Picked up by J&T Express.","completedBy":"J&T Express"}]','2026-05-19 11:00'),
+  ('DEL-002','ORD-2839','Ahmed Al-Rashid','ahmed.rashid@email.com','+60 13-876 5432','12, Persiaran Bestari','Shah Alam, MY',1,'[{"productName":"LED Monitor 27 inch","sku":"LMN-006","quantity":1}]','ready','Poslaju','PJ-MY-20260519-1203','BM Warehouse','2026-05-21','[{"step":"prepare","timestamp":"2026-05-19 08:00","note":"Order packed and verified.","completedBy":"Admin"},{"step":"ready","timestamp":"2026-05-19 09:30","note":"Ready for carrier pickup.","completedBy":"Admin"}]','2026-05-19 09:30'),
+  ('DEL-003','ORD-2838','Priya Nair','priya.nair@email.com','+60 11-234 5678','78, Jalan SS2/4','Petaling Jaya, MY',5,'[{"productName":"Noise Cancelling Earbuds","sku":"NCE-010","quantity":2},{"productName":"Portable Power Bank 20000mAh","sku":"PPB-011","quantity":2},{"productName":"Laptop Cooling Pad","sku":"LCP-007","quantity":1}]','delivered','DHL Express','DHL-MY-20260518-9905','BM Warehouse','2026-05-19','[{"step":"prepare","timestamp":"2026-05-18 14:00","note":"Items picked from BM + Vendor Warehouse.","completedBy":"Admin"},{"step":"ready","timestamp":"2026-05-18 16:00","note":"Consolidated and ready.","completedBy":"Admin"},{"step":"in_transit","timestamp":"2026-05-18 17:30","note":"DHL Express picked up parcel.","completedBy":"DHL Express"},{"step":"delivered","timestamp":"2026-05-19 08:45","note":"Delivered successfully. Signed by recipient.","completedBy":"Admin"}]','2026-05-19 08:45'),
+  ('DEL-004','ORD-2843','Jason Tan','jason.tan@email.com','+60 17-654 3210','22, Jalan USJ 9/5','Subang Jaya, MY',2,'[{"productName":"Smart Home Hub Device","sku":"SHH-012","quantity":2}]','prepare','GDex','GDX-MY-20260519-0088','Vendor Warehouse','2026-05-22','[{"step":"prepare","timestamp":"2026-05-19 11:20","note":"Order received, preparing at Vendor Warehouse.","completedBy":"SmartLife Corp."}]','2026-05-19 11:20'),
+  ('DEL-005','ORD-2842','Nurul Huda','nurul.huda@email.com','+60 16-998 7654','9, Jalan Cheras Perdana','Cheras, MY',4,'[{"productName":"Mechanical Keyboard RGB","sku":"MKR-004","quantity":2},{"productName":"Wireless Bluetooth Headphones","sku":"WBH-001","quantity":2}]','in_transit','J&T Express','JT-MY-20260519-5530','BM Warehouse','2026-05-20','[{"step":"prepare","timestamp":"2026-05-19 09:30","note":"Order packed and verified.","completedBy":"Admin"},{"step":"ready","timestamp":"2026-05-19 10:00","note":"Ready for dispatch.","completedBy":"Admin"},{"step":"in_transit","timestamp":"2026-05-19 10:40","note":"Out for delivery.","completedBy":"J&T Express"}]','2026-05-19 10:40'),
+  ('DEL-006','ORD-2836','Linda Chong','linda.chong@email.com','+60 12-777 8899','55, Jalan Klang Lama','Kuala Lumpur, MY',3,'[{"productName":"Ergonomic Office Chair","sku":"EOC-002","quantity":1},{"productName":"Desk Lamp LED Dimmable","sku":"DLD-009","quantity":2}]','delivered','Poslaju','PJ-MY-20260517-8843','BM Warehouse','2026-05-18','[{"step":"prepare","timestamp":"2026-05-17 10:00","note":"Packed at BM Warehouse.","completedBy":"Admin"},{"step":"ready","timestamp":"2026-05-17 12:00","note":"Ready for dispatch.","completedBy":"Admin"},{"step":"in_transit","timestamp":"2026-05-17 14:30","note":"Courier collected.","completedBy":"Poslaju"},{"step":"delivered","timestamp":"2026-05-18 11:00","note":"Delivered. Signed by Linda.","completedBy":"Admin"}]','2026-05-18 11:00')
+ON CONFLICT (id) DO UPDATE SET
+  status = EXCLUDED.status,
+  timeline = EXCLUDED.timeline,
+  last_update = EXCLUDED.last_update,
+  email = EXCLUDED.email,
+  phone = EXCLUDED.phone,
+  address = EXCLUDED.address,
+  destination = EXCLUDED.destination,
+  items = EXCLUDED.items,
+  items_detail = EXCLUDED.items_detail,
+  carrier = EXCLUDED.carrier,
+  tracking_number = EXCLUDED.tracking_number,
+  warehouse = EXCLUDED.warehouse,
+  estimated_delivery = EXCLUDED.estimated_delivery;
 
 -- TRANSFERS
 INSERT INTO transfers (id, from_warehouse, to_warehouse, requested_by, approved_by, status, items, total_items, reason, notes, expected_arrival, created_at, updated_at) VALUES
