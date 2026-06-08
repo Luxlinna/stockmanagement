@@ -21,6 +21,30 @@ INSERT INTO profiles (id, email, full_name, role) VALUES
   ('USR-003', 'viewer@stock.io', 'Viewer Guest',  'viewer')
 ON CONFLICT (id) DO NOTHING;
 
+-- CATEGORIES
+INSERT INTO categories (id, name, icon, color, description, sort_order) VALUES
+  ('CAT-001', 'Electronics',  'ri-cpu-line',          '#3b82f6', 'Computers, phones, and electronic devices', 1),
+  ('CAT-002', 'Furniture',    'ri-sofa-line',          '#8b5cf6', 'Office and home furniture', 2),
+  ('CAT-003', 'Accessories',  'ri-handbag-line',       '#f59e0b', 'Bags, cases, and add-on accessories', 3),
+  ('CAT-004', 'Smart Home',   'ri-home-wifi-line',     '#10b981', 'Smart home automation devices', 4),
+  ('CAT-005', 'Lighting',     'ri-lightbulb-line',     '#f97316', 'LED, desk, and ambient lighting', 5)
+ON CONFLICT (name) DO NOTHING;
+
+-- SUB-CATEGORIES
+INSERT INTO sub_categories (id, category_id, name, description, sort_order) VALUES
+  ('SUB-001', 'CAT-001', 'Audio',          'Headphones, speakers, earbuds',             1),
+  ('SUB-002', 'CAT-001', 'Cameras & Video','Webcams and recording equipment',            2),
+  ('SUB-003', 'CAT-001', 'Monitors',       'Desktop and portable displays',              3),
+  ('SUB-004', 'CAT-001', 'Input Devices',  'Keyboards, mice, and peripherals',           4),
+  ('SUB-005', 'CAT-001', 'Power',          'Power banks, chargers, and cables',          5),
+  ('SUB-006', 'CAT-002', 'Seating',        'Office chairs and ergonomic seating',        1),
+  ('SUB-007', 'CAT-002', 'Desks',          'Standing and fixed desks',                   2),
+  ('SUB-008', 'CAT-003', 'Cooling',        'Laptop stands and cooling pads',             1),
+  ('SUB-009', 'CAT-003', 'Storage',        'Cases, bags, and storage solutions',         2),
+  ('SUB-010', 'CAT-004', 'Hubs & Devices', 'Smart home hubs and control devices',        1),
+  ('SUB-011', 'CAT-005', 'Desk Lamps',     'Dimmable and adjustable desk lamps',         1)
+ON CONFLICT (category_id, name) DO NOTHING;
+
 INSERT INTO notification_settings (user_id, email_enabled, sms_enabled, in_app_enabled, browser_push_enabled, category_thresholds) VALUES
   ('USR-001', true, false, true, true,
    '{"Electronics":5,"Furniture":3,"Lighting":4,"Smart Home":5,"Accessories":10}'),

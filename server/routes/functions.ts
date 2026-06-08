@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { pool } from '../db';
+import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -55,6 +57,48 @@ router.post('/alert-rules-evaluator', async (_req, res) => {
     res.json({ total_created: totalCreated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /functions/v1/invite-user  (admin only)
+router.post('/invite-user', authenticate, async (req: AuthRequest, res) => {
+  const { email, full_name = 'User', role = 'staff', phone, password } = req.body;
+
+  if (!email) return res.status(400).json({ success: false, error: 'Email is required' });
+  if (!['admin', 'staff', 'viewer'].includes(role)) {
+    return res.status(400).json({ success: false, error: 'Invalid role' });
+  }
+
+  try {
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'A user with this email already exists' });
+    }
+
+    const plainPassword = password || Math.random().toString(36).slice(-10);
+    const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+    const countResult = await pool.query('SELECT COUNT(*) FROM users');
+    const seq = String(Number(countResult.rows[0].count) + 1).padStart(3, '0');
+    const userId = `USR-${seq}`;
+
+    await pool.query('BEGIN');
+    await pool.query('INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)', [userId, email, passwordHash]);
+    await pool.query(
+      'INSERT INTO profiles (id, email, full_name, role, phone) VALUES ($1, $2, $3, $4, $5)',
+      [userId, email, full_name, role, phone || null]
+    );
+    await pool.query(
+      `INSERT INTO notification_settings (user_id, email_enabled, sms_enabled, in_app_enabled, browser_push_enabled, category_thresholds)
+       VALUES ($1, true, false, true, true, $2) ON CONFLICT (user_id) DO NOTHING`,
+      [userId, JSON.stringify({ Electronics: 5, Furniture: 3, Lighting: 4, 'Smart Home': 5, Accessories: 10 })]
+    );
+    await pool.query('COMMIT');
+
+    res.json({ success: true, userId, email, role, tempPassword: password ? undefined : plainPassword });
+  } catch (err: any) {
+    await pool.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

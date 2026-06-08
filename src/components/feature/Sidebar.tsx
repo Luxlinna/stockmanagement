@@ -34,6 +34,10 @@ const managementNavItems: NavItem[] = [
   { label: 'Requirements', icon: 'ri-list-check-2',       path: '/requirements', roles: ADMIN },
 ];
 
+const adminNavItems: NavItem[] = [
+  { label: 'Categories',   icon: 'ri-price-tag-2-line',   path: '/admin/categories', roles: ADMIN },
+];
+
 const notificationNavItems: NavItem[] = [
   { label: 'History',   icon: 'ri-history-line',         path: '/notifications/history',   roles: STAFF },
   { label: 'Analytics', icon: 'ri-bar-chart-box-line',   path: '/notifications/analytics', roles: ADMIN },
@@ -86,9 +90,10 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const role = (profile?.role ?? 'viewer') as UserRole;
   const roleMeta = ROLE_META[role];
 
-  const visibleMain         = mainNavItems.filter(i => i.roles.includes(role));
-  const visibleManagement   = managementNavItems.filter(i => i.roles.includes(role));
-  const visibleNotifications= notificationNavItems.filter(i => i.roles.includes(role));
+  const visibleMain          = mainNavItems.filter(i => i.roles.includes(role));
+  const visibleManagement    = managementNavItems.filter(i => i.roles.includes(role));
+  const visibleNotifications = notificationNavItems.filter(i => i.roles.includes(role));
+  const visibleAdmin         = adminNavItems.filter(i => i.roles.includes(role));
 
   const handleSignOut = async () => {
     await signOut();
@@ -159,6 +164,16 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
           <>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest px-3 mb-3 mt-6">Notifications</p>
             {visibleNotifications.map(item => (
+              <NavItemLink key={item.path} item={item} onClose={onClose} />
+            ))}
+          </>
+        )}
+
+        {/* Admin */}
+        {visibleAdmin.length > 0 && (
+          <>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest px-3 mb-3 mt-6">Admin</p>
+            {visibleAdmin.map(item => (
               <NavItemLink key={item.path} item={item} onClose={onClose} />
             ))}
           </>

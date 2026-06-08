@@ -2,6 +2,28 @@
 -- Stock Management — PostgreSQL Schema (no Supabase)
 -- ============================================================
 
+-- CATEGORIES
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  icon TEXT NOT NULL DEFAULT 'ri-folder-line',
+  color TEXT NOT NULL DEFAULT '#10b981',
+  description TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- SUB-CATEGORIES
+CREATE TABLE IF NOT EXISTS sub_categories (
+  id TEXT PRIMARY KEY,
+  category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(category_id, name)
+);
+
 -- USERS (replaces Supabase auth.users)
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,

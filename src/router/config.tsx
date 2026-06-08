@@ -20,6 +20,7 @@ import NotificationSettingsPage from "../pages/notifications/settings/page";
 import NotificationHistoryPage from "../pages/notifications/history/page";
 import ReportsPage from "../pages/reports/page";
 import RequirementsPage from "../pages/requirements/page";
+import AdminCategoriesPage from "../pages/admin/categories/page";
 
 // ── Role access matrix ────────────────────────────────────────────
 // admin  → full access
@@ -58,8 +59,9 @@ const routes: RouteObject[] = [
   { path: '/notifications/settings', element: <ProtectedRoute roles={[...STAFF]}><NotificationSettingsPage /></ProtectedRoute> },
 
   // Admin only
-  { path: '/teams',        element: <ProtectedRoute roles={[...ADMIN]}><TeamsPage /></ProtectedRoute> },
-  { path: '/requirements', element: <ProtectedRoute roles={[...ADMIN]}><RequirementsPage /></ProtectedRoute> },
+  { path: '/teams',             element: <ProtectedRoute roles={[...ADMIN]}><TeamsPage /></ProtectedRoute> },
+  { path: '/requirements',      element: <ProtectedRoute roles={[...ADMIN]}><RequirementsPage /></ProtectedRoute> },
+  { path: '/admin/categories',  element: <ProtectedRoute roles={[...ADMIN]}><AdminCategoriesPage /></ProtectedRoute> },
   { path: '/notifications/analytics', element: <ProtectedRoute roles={[...ADMIN]}><NotificationAnalyticsPage /></ProtectedRoute> },
 
   { path: '*', element: <NotFound /> },

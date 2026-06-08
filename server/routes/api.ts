@@ -11,6 +11,7 @@ const ALLOWED_TABLES = new Set([
   'webhook_configs', 'activity_log', 'daily_revenue', 'monthly_snapshots',
   'top_products', 'category_breakdown', 'return_reasons', 'vendor_performance',
   'warehouse_performance', 'notification_analytics', 'profiles',
+  'categories', 'sub_categories',
 ]);
 
 const OPS: Record<string, string> = {
