@@ -1,12 +1,23 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import type { User, Session } from '@supabase/supabase-js';
 
 type UserRole = 'admin' | 'staff' | 'viewer';
 
+// Slim local types — no @supabase/supabase-js dependency
+export interface AppUser {
+  id: string;
+  email: string;
+  user_metadata?: Record<string, unknown>;
+}
+
+export interface AppSession {
+  access_token: string;
+  user: AppUser;
+}
+
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AppUser | null;
+  session: AppSession | null;
   profile: { full_name: string; email: string; role: UserRole; phone: string | null } | null;
   loading: boolean;
   isAdmin: boolean;
@@ -20,8 +31,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [session, setSession] = useState<AppSession | null>(null);
   const [profile, setProfile] = useState<{ full_name: string; email: string; role: UserRole; phone: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -38,27 +49,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      const appSession = s as AppSession | null;
+      setSession(appSession);
+      setUser(appSession?.user ?? null);
+      if (appSession?.user) {
+        fetchProfile(appSession.user.id).finally(() => setLoading(false));
       } else {
         setLoading(false);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      const appSession = s as AppSession | null;
+      setSession(appSession);
+      setUser(appSession?.user ?? null);
+      if (appSession?.user) {
+        fetchProfile(appSession.user.id);
       } else {
         setProfile(null);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -74,23 +87,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (!error && data.user) {
+      const u = data.user as AppUser;
       await supabase.from('profiles').upsert({
-        id: data.user.id,
+        id: u.id,
         email,
         full_name: fullName,
         role,
         phone: phone || null,
-      });
-      // Auto-create notification settings for new user
+      }, { onConflict: 'id' });
       await supabase.from('notification_settings').upsert({
-        user_id: data.user.id,
+        user_id: u.id,
         email_enabled: true,
         sms_enabled: false,
         in_app_enabled: true,
         browser_push_enabled: true,
         category_thresholds: { Electronics: 5, Furniture: 3, Lighting: 4, 'Smart Home': 5, Accessories: 10 },
       }, { onConflict: 'user_id' });
-      await fetchProfile(data.user.id);
+      await fetchProfile(u.id);
     }
 
     return { error };
@@ -100,12 +113,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setProfile(null);
     setUser(null);
+    setSession(null);
   };
 
   const refreshProfile = async () => {
-    if (user) {
-      await fetchProfile(user.id);
-    }
+    if (user) await fetchProfile(user.id);
   };
 
   const isAdmin = profile?.role === 'admin';
