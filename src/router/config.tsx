@@ -1,5 +1,7 @@
 import type { RouteObject } from "react-router-dom";
+import ProtectedRoute from "@/components/feature/ProtectedRoute";
 import NotFound from "../pages/NotFound";
+import UnauthorizedPage from "../pages/unauthorized/page";
 import LoginPage from "../pages/login/page";
 import SignupPage from "../pages/signup/page";
 import Home from "../pages/home/page";
@@ -19,83 +21,48 @@ import NotificationHistoryPage from "../pages/notifications/history/page";
 import ReportsPage from "../pages/reports/page";
 import RequirementsPage from "../pages/requirements/page";
 
+// ── Role access matrix ────────────────────────────────────────────
+// admin  → full access
+// staff  → operational pages (no reports, no team management)
+// viewer → read-only overview (dashboard, inventory, orders, deliveries,
+//           warehouses, reports — no writes, no team/notification management)
+
+const ALL   = ['admin', 'staff', 'viewer'] as const;
+const STAFF = ['admin', 'staff']           as const;
+const ADMIN = ['admin']                    as const;
+const REPORTS = ['admin', 'viewer']        as const;
+
 const routes: RouteObject[] = [
-  {
-    path: "/login",
-    element: <LoginPage />,
-  },
-  {
-    path: "/signup",
-    element: <SignupPage />,
-  },
-  {
-    path: "/",
-    element: <Home />,
-  },
-  {
-    path: "/inventory",
-    element: <InventoryPage />,
-  },
-  {
-    path: "/orders",
-    element: <OrdersPage />,
-  },
-  {
-    path: "/deliveries",
-    element: <DeliveriesPage />,
-  },
-  {
-    path: "/transfers",
-    element: <TransfersPage />,
-  },
-  {
-    path: "/purchases",
-    element: <PurchasesPage />,
-  },
-  {
-    path: "/vendors",
-    element: <VendorsPage />,
-  },
-  {
-    path: "/returns",
-    element: <ReturnsPage />,
-  },
-  {
-    path: "/warehouses",
-    element: <WarehousesPage />,
-  },
-  {
-    path: "/promotions",
-    element: <PromotionsPage />,
-  },
-  {
-    path: "/notifications/settings",
-    element: <NotificationSettingsPage />,
-  },
-  {
-    path: "/notifications/history",
-    element: <NotificationHistoryPage />,
-  },
-  {
-    path: "/notifications/analytics",
-    element: <NotificationAnalyticsPage />,
-  },
-  {
-    path: "/reports",
-    element: <ReportsPage />,
-  },
-  {
-    path: "/teams",
-    element: <TeamsPage />,
-  },
-  {
-    path: "/requirements",
-    element: <RequirementsPage />,
-  },
-  {
-    path: "*",
-    element: <NotFound />,
-  },
+  // Public routes
+  { path: '/login',  element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
+  { path: '/unauthorized', element: <UnauthorizedPage /> },
+
+  // All authenticated roles
+  { path: '/',          element: <ProtectedRoute roles={[...ALL]}><Home /></ProtectedRoute> },
+  { path: '/inventory', element: <ProtectedRoute roles={[...ALL]}><InventoryPage /></ProtectedRoute> },
+  { path: '/orders',    element: <ProtectedRoute roles={[...ALL]}><OrdersPage /></ProtectedRoute> },
+  { path: '/deliveries',element: <ProtectedRoute roles={[...ALL]}><DeliveriesPage /></ProtectedRoute> },
+  { path: '/warehouses',element: <ProtectedRoute roles={[...ALL]}><WarehousesPage /></ProtectedRoute> },
+
+  // Admin + viewer (analytics / read-heavy)
+  { path: '/reports', element: <ProtectedRoute roles={[...REPORTS]}><ReportsPage /></ProtectedRoute> },
+
+  // Admin + staff (operational write access)
+  { path: '/transfers', element: <ProtectedRoute roles={[...STAFF]}><TransfersPage /></ProtectedRoute> },
+  { path: '/returns',   element: <ProtectedRoute roles={[...STAFF]}><ReturnsPage /></ProtectedRoute> },
+  { path: '/purchases', element: <ProtectedRoute roles={[...STAFF]}><PurchasesPage /></ProtectedRoute> },
+  { path: '/vendors',   element: <ProtectedRoute roles={[...STAFF]}><VendorsPage /></ProtectedRoute> },
+  { path: '/promotions',element: <ProtectedRoute roles={[...STAFF]}><PromotionsPage /></ProtectedRoute> },
+  { path: '/notifications/history',  element: <ProtectedRoute roles={[...STAFF]}><NotificationHistoryPage /></ProtectedRoute> },
+  { path: '/notifications/settings', element: <ProtectedRoute roles={[...STAFF]}><NotificationSettingsPage /></ProtectedRoute> },
+
+  // Admin only
+  { path: '/teams',        element: <ProtectedRoute roles={[...ADMIN]}><TeamsPage /></ProtectedRoute> },
+  { path: '/requirements', element: <ProtectedRoute roles={[...ADMIN]}><RequirementsPage /></ProtectedRoute> },
+  { path: '/notifications/analytics', element: <ProtectedRoute roles={[...ADMIN]}><NotificationAnalyticsPage /></ProtectedRoute> },
+
+  { path: '*', element: <NotFound /> },
 ];
 
 export default routes;

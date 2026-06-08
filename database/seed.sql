@@ -2,19 +2,31 @@
 -- Seed Data
 -- ============================================================
 
--- Default admin user (password: admin123)
--- Default admin: email=admin@stock.io  password=admin123
+-- Test accounts
+-- admin@stock.io  / admin123
+-- staff@stock.io  / staff123
+-- viewer@stock.io / viewer123
 INSERT INTO users (id, email, password_hash) VALUES
   ('USR-001', 'admin@stock.io',
-   '$2a$10$sWnVxw74dT1pJiyZ1UWPsukC3Cqfdrl.u11TddkwX8feDnQCiFHYu')
+   '$2a$10$sWnVxw74dT1pJiyZ1UWPsukC3Cqfdrl.u11TddkwX8feDnQCiFHYu'),
+  ('USR-002', 'staff@stock.io',
+   '$2a$10$iW9jZiy3Wc63W/FROOu5Ie2YkEZWrbxBD6KDi68nDf/ira/1fjq0y'),
+  ('USR-003', 'viewer@stock.io',
+   '$2a$10$L1YDtITSVaf8IyZvNTX53Otyp0r4PBcc9xyIApb4JJv9rdhLXOPCe')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO profiles (id, email, full_name, role) VALUES
-  ('USR-001', 'admin@stock.io', 'Admin', 'admin')
+  ('USR-001', 'admin@stock.io',  'Admin User',   'admin'),
+  ('USR-002', 'staff@stock.io',  'Staff Member', 'staff'),
+  ('USR-003', 'viewer@stock.io', 'Viewer Guest',  'viewer')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO notification_settings (user_id, email_enabled, sms_enabled, in_app_enabled, browser_push_enabled, category_thresholds) VALUES
   ('USR-001', true, false, true, true,
+   '{"Electronics":5,"Furniture":3,"Lighting":4,"Smart Home":5,"Accessories":10}'),
+  ('USR-002', true, false, true, true,
+   '{"Electronics":5,"Furniture":3,"Lighting":4,"Smart Home":5,"Accessories":10}'),
+  ('USR-003', true, false, true, false,
    '{"Electronics":5,"Furniture":3,"Lighting":4,"Smart Home":5,"Accessories":10}')
 ON CONFLICT (user_id) DO NOTHING;
 

@@ -15,6 +15,8 @@ export interface AppSession {
   user: AppUser;
 }
 
+export type { UserRole };
+
 interface AuthContextType {
   user: AppUser | null;
   session: AppSession | null;
@@ -22,6 +24,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   isStaff: boolean;
+  isViewer: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, role?: UserRole, phone?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -122,10 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAdmin = profile?.role === 'admin';
   const isStaff = profile?.role === 'admin' || profile?.role === 'staff';
+  const isViewer = profile?.role === 'viewer';
 
   return (
     <AuthContext.Provider
-      value={{ user, session, profile, loading, isAdmin, isStaff, signIn, signUp, signOut, refreshProfile }}
+      value={{ user, session, profile, loading, isAdmin, isStaff, isViewer, signIn, signUp, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
