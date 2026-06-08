@@ -130,7 +130,7 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
           </div>
           <div>
             <span className="text-base font-bold text-gray-900 tracking-tight">StockManagement</span>
-            <p className="text-xs text-gray-400 leading-none mt-0.5">Admin Panel</p>
+            <p className="text-xs text-gray-400 leading-none mt-0.5">{profile?.full_name || 'Staff'}</p>
           </div>
         </div>
         <button
