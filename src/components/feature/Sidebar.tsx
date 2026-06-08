@@ -118,7 +118,7 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      className={`w-60 h-screen bg-white border-r border-gray-100 flex flex-col fixed left-0 top-0 z-30 transition-transform duration-300 ease-in-out ${
+      className={`w-60 h-dvh bg-white border-r border-gray-100 flex flex-col fixed left-0 top-0 z-30 transition-transform duration-300 ease-in-out ${
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}
     >
@@ -142,7 +142,7 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-0.5">
+      <nav className="flex-1 min-h-0 px-3 py-4 overflow-y-auto space-y-0.5">
         {/* Main Menu */}
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest px-3 mb-3">Main Menu</p>
         {visibleMain.map(item => (
