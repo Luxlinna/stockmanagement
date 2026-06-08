@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 import authRouter from './routes/auth';
 import apiRouter from './routes/api';
 import functionsRouter from './routes/functions';
@@ -10,9 +11,18 @@ import { pool } from './db';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-// Render injects PORT; fall back to SERVER_PORT for local dev
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
 const isProd = process.env.NODE_ENV === 'production';
+
+async function runMigration() {
+  try {
+    const schema = readFileSync(path.join(__dirname, '..', 'database', 'schema.sql'), 'utf-8');
+    await pool.query(schema);
+    console.log('Database migration complete.');
+  } catch (err: any) {
+    console.error('Migration error (continuing):', err.message);
+  }
+}
 
 app.use(cors({
   origin: isProd ? true : ['http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000'],
@@ -40,6 +50,11 @@ if (isProd) {
   app.get('*', (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
 }
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} (${isProd ? 'production' : 'development'})`);
-});
+// Run migration then start — migration failure never blocks the server
+if (isProd) {
+  runMigration().finally(() => {
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  });
+} else {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT} (development)`));
+}
