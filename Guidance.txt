@@ -1,0 +1,17 @@
+open two terminal tabs and run:
+
+Tab 1 — Backend:
+
+
+npm run dev:server
+Tab 2 — Frontend:
+
+
+npm run dev
+
+
+
+Login with:
+
+Email: admin@stock.io
+Password: admin123
