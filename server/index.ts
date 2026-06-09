@@ -50,11 +50,6 @@ if (isProd) {
   app.get('*', (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
 }
 
-// Run migration then start — migration failure never blocks the server
-if (isProd) {
-  runMigration().finally(() => {
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  });
-} else {
-  app.listen(PORT, () => console.log(`Server running on port ${PORT} (development)`));
-}
+// Start immediately — migration runs in background so Render health check never times out
+app.listen(PORT, () => console.log(`Server running on port ${PORT}${isProd ? '' : ' (development)'}`));
+if (isProd) runMigration();
