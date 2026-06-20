@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import DashboardLayout from '@/components/feature/DashboardLayout';
 import { type Promotion, type PromotionStatus, type PromotionType } from '@/mocks/promotions';
 import PromotionStatusBadge from './components/PromotionStatusBadge';
@@ -56,6 +57,7 @@ function mapPromotion(row: Record<string, unknown>): Promotion {
 
 export default function PromotionsPage() {
   const { formatAmount } = useCurrency();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [promos, setPromos] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -67,6 +69,14 @@ export default function PromotionsPage() {
   useEffect(() => {
     fetchPromotions();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'new') {
+      setShowForm(true);
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const fetchPromotions = async () => {
     setLoading(true);

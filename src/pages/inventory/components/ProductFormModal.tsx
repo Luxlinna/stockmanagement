@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Product } from '@/mocks/inventory';
-import { supabase } from '@/lib/supabase';
+import type { Product, ProductType } from '@/mocks/inventory';
 
 interface ProductFormModalProps {
   product: Product | null;
+  nextNum: number;
   onClose: () => void;
   onSave: (data: Omit<Product, 'id' | 'status' | 'lastUpdated'> & { id?: string }) => void;
 }
@@ -13,52 +13,45 @@ const DEFAULT_CATEGORIES = ['Electronics', 'Furniture', 'Accessories', 'Lighting
 const warehouses: ('BM Warehouse' | 'Vendor Warehouse')[] = ['BM Warehouse', 'Vendor Warehouse'];
 const productTypes = ['kg', 'pack', 'box', 'piece', 'liter', 'meter', 'bottle', 'bundle'] as const;
 
-export default function ProductFormModal({ product, onClose, onSave }: ProductFormModalProps) {
-  const [imageMode, setImageMode] = useState<'file' | 'url'>('url');
+function autoSku(name: string, nextNum: number) {
+  const prefix = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'PRD';
+
+  return `${prefix}-${String(nextNum).padStart(3, '0')}`;
+}
+
+type ProductFormState = Omit<Product, 'id' | 'status' | 'lastUpdated'>;
+
+export default function ProductFormModal({ product, nextNum, onClose, onSave }: ProductFormModalProps) {
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-
-  type ProductFormState = {
-  name: string;
-  sku: string;
-  category: string;
-  warehouse: 'BM Warehouse' | 'Vendor Warehouse';
-  vendor: string;
-  imageUrl: string;
-  stock: number;
-  lowStockThreshold: number;
-  price: number;
-  productType: (typeof productTypes)[number];
-};
-
+  const [skuManuallyEdited, setSkuManuallyEdited] = useState(Boolean(product));
   const [form, setForm] = useState<ProductFormState>({
     name: '',
     sku: '',
     category: 'Electronics',
     warehouse: 'BM Warehouse' as 'BM Warehouse' | 'Vendor Warehouse',
     vendor: '',
-    imageUrl: '',
     stock: 0,
     lowStockThreshold: 10,
     price: 0,
-    productType: 'pack',
+    productType: 'pack' as ProductType,
   });
 
   useEffect(() => {
-    const loadCategories = async () => {
-      const { data, error } = await supabase.from('categories').select('name').order('name', { ascending: true });
-      if (!error && data) {
-        setCategories(data.map((item) => item.name));
-      } else if (localStorage.getItem(CATEGORY_STORAGE_KEY)) {
-        try {
-          const parsed = JSON.parse(localStorage.getItem(CATEGORY_STORAGE_KEY) || '[]') as string[];
-          if (Array.isArray(parsed) && parsed.length > 0) setCategories(parsed);
-        } catch {
-          localStorage.removeItem(CATEGORY_STORAGE_KEY);
-        }
-      }
-    };
+    const stored = localStorage.getItem(CATEGORY_STORAGE_KEY);
+    if (!stored) return;
 
-    loadCategories();
+    try {
+      const parsed = JSON.parse(stored) as string[];
+      if (Array.isArray(parsed) && parsed.length > 0) setCategories(parsed);
+    } catch {
+      localStorage.removeItem(CATEGORY_STORAGE_KEY);
+    }
   }, []);
 
   useEffect(() => {
@@ -69,26 +62,43 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
         category: product.category,
         warehouse: product.warehouse,
         vendor: product.vendor ?? '',
-        imageUrl: product.imageUrl ?? '',
         stock: product.stock,
         lowStockThreshold: product.lowStockThreshold,
         price: product.price,
         productType: product.productType,
+        imageUrl: product.imageUrl,
       });
+      setSkuManuallyEdited(true);
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        sku: skuManuallyEdited ? prev.sku : autoSku(prev.name, nextNum),
+      }));
     }
-  }, [product]);
+  }, [product, nextNum, skuManuallyEdited]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]:
-        name === 'stock' || name === 'lowStockThreshold' || name === 'price'
+
+    if (name === 'sku') {
+      setSkuManuallyEdited(true);
+      setForm(prev => ({ ...prev, sku: value }));
+      return;
+    }
+
+    setForm(prev => {
+      const updated: ProductFormState = {
+        ...prev,
+        [name]: name === 'stock' || name === 'lowStockThreshold' || name === 'price'
           ? parseFloat(value) || 0
-          : name === 'productType'
-          ? (value as (typeof productTypes)[number])
           : value,
-    }));
+      };
+      // Auto-generate SKU when name changes (unless user manually edited SKU)
+      if (name === 'name' && !skuManuallyEdited) {
+        updated.sku = autoSku(value, nextNum);
+      }
+      return updated;
+    });
   };
 
   const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,15 +112,19 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     onSave({ ...form, id: product?.id });
   };
 
+  const totalValue = form.price * form.stock;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-lg mx-4 shadow-xl">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl flex flex-col max-h-[90dvh]">
+
+        {/* Sticky header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="text-base font-bold text-gray-900">{product ? 'Edit Product' : 'Add New Product'}</h2>
             <p className="text-xs text-gray-400 mt-0.5">{product ? `Editing: ${product.name}` : 'Fill in the details below'}</p>
@@ -175,47 +189,6 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300"
               />
             </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Product Image</label>
-              <div className="flex items-center gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setImageMode('file')}
-                  className={`px-3 py-1.5 text-xs rounded-full border ${imageMode === 'file' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                >
-                  Choose File
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImageMode('url')}
-                  className={`px-3 py-1.5 text-xs rounded-full border ${imageMode === 'url' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                >
-                  Use URL
-                </button>
-              </div>
-              {imageMode === 'file' ? (
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFilePick}
-                  className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
-                />
-              ) : (
-                <input
-                  name="imageUrl"
-                  value={form.imageUrl}
-                  onChange={handleChange}
-                  placeholder="https://example.com/product.jpg"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300"
-                />
-              )}
-              {form.imageUrl && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                  <img src={form.imageUrl} alt="Preview" className="w-10 h-10 rounded-md object-cover border border-gray-100" />
-                  <span>Preview</span>
-                </div>
-              )}
-            </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Initial Stock</label>
               <input
@@ -266,7 +239,9 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
               </select>
             </div>
           </div>
-          <div className="flex items-center gap-3 pt-2">
+
+          {/* Sticky footer */}
+          <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
             <button
               type="button"
               onClick={onClose}
@@ -282,6 +257,7 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
             </button>
           </div>
         </form>
+
       </div>
     </div>
   );

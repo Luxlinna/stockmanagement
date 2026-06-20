@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 interface Product {
   id: string;
@@ -10,6 +11,7 @@ interface Product {
 }
 
 export default function WarehouseSnapshot() {
+  const { formatAmount } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -100,7 +102,7 @@ export default function WarehouseSnapshot() {
               </div>
               <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-50">
                 <span className="text-gray-400">Est. Value</span>
-                <span className="font-bold text-gray-800">${w.value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                <span className="font-bold text-gray-800">{formatAmount(w.value)}</span>
               </div>
             </div>
           </div>

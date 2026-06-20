@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DeliveryRecord, DeliveryStep } from '@/mocks/deliveries';
+import { type DeliveryRecord, type DeliveryStep } from '@/mocks/deliveries';
 import DeliveryStepTracker from './DeliveryStepTracker';
 
 interface DeliveryDetailModalProps {
@@ -32,6 +32,7 @@ export default function DeliveryDetailModal({ delivery, onClose, onAdvance }: De
   const currentIdx = stepIndex[delivery.status];
   const nextStep = steps[currentIdx + 1];
   const nextLabel = nextStepLabel[delivery.status];
+  const totalItems = delivery.items.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleAdvance = () => {
     if (!nextStep) return;
@@ -43,11 +44,10 @@ export default function DeliveryDetailModal({ delivery, onClose, onAdvance }: De
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
       <div className="bg-white rounded-2xl w-full max-w-xl mx-4 shadow-xl max-h-[90vh] flex flex-col">
-        {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100 shrink-0">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-base font-bold text-gray-900">DEL — {delivery.orderId}</h2>
+              <h2 className="text-base font-bold text-gray-900">DEL - {delivery.orderId}</h2>
               <span className={`text-xs font-medium px-2 py-1 rounded-full ${
                 delivery.status === 'delivered' ? 'bg-emerald-50 text-emerald-700' :
                 delivery.status === 'in_transit' ? 'bg-sky-50 text-sky-700' :
@@ -57,24 +57,22 @@ export default function DeliveryDetailModal({ delivery, onClose, onAdvance }: De
                 {delivery.status.replace('_', ' ').replace(/^\w/, (c) => c.toUpperCase())}
               </span>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">{delivery.customer} · {delivery.city}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{delivery.destination} - {delivery.warehouse}</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer">
             <i className="ri-close-line text-lg"></i>
           </button>
         </div>
 
-        {/* Step Tracker */}
         <div className="px-8 py-5 border-b border-gray-100 shrink-0">
           <DeliveryStepTracker currentStatus={delivery.status} />
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-          {/* Info cards */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { icon: 'ri-truck-line', label: 'Carrier', value: delivery.carrier },
-              { icon: 'ri-barcode-line', label: 'Tracking No.', value: delivery.trackingNumber },
+              { icon: 'ri-truck-line', label: 'Transfer ID', value: delivery.transfer_id || delivery.id },
+              { icon: 'ri-user-line', label: 'Driver', value: delivery.driver_name || 'Unassigned' },
               { icon: 'ri-building-2-line', label: 'Warehouse', value: delivery.warehouse },
               { icon: 'ri-calendar-check-line', label: 'Est. Delivery', value: delivery.estimatedDelivery },
             ].map((info) => (
@@ -90,12 +88,11 @@ export default function DeliveryDetailModal({ delivery, onClose, onAdvance }: De
             ))}
           </div>
 
-          {/* Items */}
           <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Package Contents ({delivery.totalItems} items)</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Package Contents ({totalItems} items)</p>
             <div className="space-y-2">
               {delivery.items.map((item, i) => (
-                <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2.5">
+                <div key={`${item.sku}-${i}`} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2.5">
                   <div className="w-7 h-7 flex items-center justify-center rounded-md bg-white border border-gray-200">
                     <i className="ri-box-3-line text-gray-400 text-sm"></i>
                   </div>
@@ -103,18 +100,17 @@ export default function DeliveryDetailModal({ delivery, onClose, onAdvance }: De
                     <p className="text-sm font-medium text-gray-800">{item.productName}</p>
                     <p className="text-xs text-gray-400">{item.sku}</p>
                   </div>
-                  <span className="text-sm font-semibold text-gray-600">×{item.quantity}</span>
+                  <span className="text-sm font-semibold text-gray-600">x{item.quantity}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Timeline */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Activity Timeline</p>
             <div className="relative pl-6 space-y-4">
               {delivery.timeline.map((event, i) => (
-                <div key={i} className="relative">
+                <div key={`${event.step}-${event.timestamp}-${i}`} className="relative">
                   <div className="absolute -left-6 top-1 w-4 h-4 flex items-center justify-center">
                     <div className={`w-3 h-3 rounded-full ${i === delivery.timeline.length - 1 ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
                   </div>
@@ -129,14 +125,13 @@ export default function DeliveryDetailModal({ delivery, onClose, onAdvance }: De
                       <span className="text-sm font-semibold text-gray-800 capitalize">{event.step.replace('_', ' ')}</span>
                     </div>
                     <p className="text-sm text-gray-500 mt-0.5">{event.note}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{event.timestamp} {event.completedBy ? `· by ${event.completedBy}` : ''}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{event.timestamp} {event.completedBy ? `- by ${event.completedBy}` : ''}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Admin action */}
           {delivery.status !== 'delivered' && (
             <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
               <p className="text-xs font-semibold text-emerald-700 mb-2">Admin Action</p>

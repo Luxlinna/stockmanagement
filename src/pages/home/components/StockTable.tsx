@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 type ProductStatus = 'in_stock' | 'low_stock' | 'out_of_stock';
 
@@ -32,6 +33,7 @@ const statusConfig: Record<ProductStatus, { label: string; dot: string; text: st
 };
 
 export default function StockTable() {
+  const { formatAmount } = useCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [filter, setFilter] = useState<'all' | ProductStatus>('all');
   const [search, setSearch] = useState('');
@@ -179,7 +181,7 @@ export default function StockTable() {
                     </div>
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className="text-sm font-semibold text-gray-700">${p.price.toFixed(2)}</span>
+                    <span className="text-sm font-semibold text-gray-700">{formatAmount(p.price)}</span>
                   </td>
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-1">

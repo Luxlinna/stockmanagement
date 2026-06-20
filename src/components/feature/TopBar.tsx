@@ -87,16 +87,14 @@ export default function TopBar({ title, subtitle, onMenuClick }: TopBarProps) {
             <button
               onClick={() => setDisplayMode('usd')}
               className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${displayMode === 'usd' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              title="Show USD only"
             >
               USD
             </button>
             <button
-              onClick={() => setDisplayMode('dual')}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${displayMode === 'dual' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              title="Show USD + KHR"
+              onClick={() => setDisplayMode('khr')}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${displayMode === 'khr' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              USD + KHR
+              KHR
             </button>
           </div>
 

@@ -32,7 +32,7 @@ export default function DashboardLayout({ title, subtitle, children }: Dashboard
   }
 
   return (
-    <div className="min-h-screen bg-gray-50/50 flex">
+    <div className="h-dvh bg-gray-50/50 flex overflow-hidden">
       <Sidebar mobileOpen={mobileSidebarOpen} onClose={() => setMobileSidebarOpen(false)} />
       {/* Mobile overlay */}
       {mobileSidebarOpen && (

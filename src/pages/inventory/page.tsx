@@ -29,7 +29,6 @@ function mapProduct(row: Record<string, unknown>): Product {
     category: row.category as string,
     warehouse: row.warehouse as 'BM Warehouse' | 'Vendor Warehouse',
     vendor: row.vendor as string | undefined,
-    imageUrl: (row.image_url as string | undefined) || (row.imageUrl as string | undefined),
     stock: row.stock as number,
     lowStockThreshold: row.low_stock_threshold as number,
     price: row.price as number,
@@ -106,6 +105,15 @@ export default function InventoryPage() {
     fetchHistory();
   }, []);
 
+  // Auto-open add modal when navigated with ?action=add
+  useEffect(() => {
+    if (searchParams.get('action') === 'add') {
+      setShowAddModal(true);
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
   // Auto-open stock adjust modal when navigated with ?restock=ID
   useEffect(() => {
     const restockId = searchParams.get('restock');
@@ -163,7 +171,6 @@ export default function InventoryPage() {
         category: data.category,
         warehouse: data.warehouse,
         vendor: data.vendor || null,
-        image_url: data.imageUrl || null,
         stock: data.stock,
         low_stock_threshold: data.lowStockThreshold,
         price: data.price,
@@ -190,7 +197,6 @@ export default function InventoryPage() {
         category: data.category,
         warehouse: data.warehouse,
         vendor: data.vendor || null,
-        image_url: data.imageUrl || null,
         stock: data.stock,
         low_stock_threshold: data.lowStockThreshold,
         price: data.price,
@@ -440,6 +446,7 @@ export default function InventoryPage() {
       {(showAddModal || editProduct) && (
         <ProductFormModal
           product={editProduct}
+          nextNum={products.length > 0 ? Math.max(...products.map(p => parseInt(p.id.replace(/\D/g, '')) || 0)) + 1 : 1}
           onClose={() => { setShowAddModal(false); setEditProduct(null); }}
           onSave={handleSaveProduct}
         />
