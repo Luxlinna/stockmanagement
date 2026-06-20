@@ -1,52 +1,103 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, type MouseEvent } from 'react';
 import DashboardLayout from '@/components/feature/DashboardLayout';
 import OrderStatusBadge from './components/OrderStatusBadge';
 import OrderDetailModal from './components/OrderDetailModal';
+import OrderFormModal from './components/OrderFormModal';
 import { Order, OrderStatus } from '@/mocks/orders';
+import type { Product } from '@/mocks/inventory';
 import { supabase } from '@/lib/supabase';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { buildOrderInsert, buildOrderUpdate, mapOrderToDraft, mapProductRow, type OrderCreateDraft } from './orderCreateUtils';
 
 type FilterStatus = 'all' | OrderStatus;
 
 function mapOrder(row: Record<string, unknown>): Order {
   return {
-    id: row.id as string,
-    customer: row.customer as string,
-    email: row.email as string,
-    phone: row.phone as string,
-    address: row.address as string,
-    city: row.city as string,
-    createdAt: row.created_at as string,
-    updatedAt: row.updated_at as string,
-    status: row.status as OrderStatus,
-    total: row.total as number,
-    itemCount: row.item_count as number,
-    vendorSplits: (row.vendor_splits as unknown as Order['vendorSplits']) || [],
-    notes: row.notes as string | undefined,
+    id: (row.id as string) || '',
+    requestedBy: ((row.requestedBy as string | undefined) ?? (row.requested_by as string | undefined)) || undefined,
+    customer: (row.customer as string) || '',
+    email: (row.email as string) || '',
+    phone: (row.phone as string) || '',
+    address: (row.address as string) || '',
+    city: (row.city as string) || '',
+    createdAt: (row.created_at as string) || (row.createdAt as string) || '',
+    updatedAt: (row.updated_at as string) || (row.updatedAt as string) || '',
+    status: (row.status as OrderStatus) || 'pending',
+    total: Number(row.total || 0),
+    itemCount: Number(row.item_count || row.itemCount || 0),
+    vendorSplits: (row.vendor_splits as unknown as Order['vendorSplits']) || (row.vendorSplits as unknown as Order['vendorSplits']) || [],
+    notes: (row.notes as string | undefined) || undefined,
   };
 }
 
 export default function OrdersPage() {
   const { formatAmount } = useCurrency();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrders();
+    fetchProducts();
   }, []);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const handleToggleMenu = (orderId: string, event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 144;
+    const menuHeight = 96;
+    const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
+    const top = Math.max(8, Math.min(window.innerHeight - menuHeight - 8, rect.bottom + 8));
+
+    if (openMenuId === orderId) {
+      setOpenMenuId(null);
+      setMenuPosition(null);
+      return;
+    }
+
+    setOpenMenuId(orderId);
+    setMenuPosition({ left, top });
+  };
 
   const fetchOrders = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.error(error);
-    } else {
-      setOrders((data || []).map(mapOrder));
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error(error);
+        showToast('Failed to load orders.');
+      } else {
+        setOrders((data || []).map(mapOrder));
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to load orders.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const fetchProducts = async () => {
+    const { data, error } = await supabase.from('products').select('*').order('name', { ascending: true });
+    if (error) console.error(error);
+    else setProducts((data || []).map(mapProductRow));
   };
 
   const filtered = useMemo(() => {
@@ -54,7 +105,8 @@ export default function OrdersPage() {
       const matchStatus = filterStatus === 'all' || o.status === filterStatus;
       const matchSearch =
         o.id.toLowerCase().includes(search.toLowerCase()) ||
-        o.customer.toLowerCase().includes(search.toLowerCase());
+        o.customer.toLowerCase().includes(search.toLowerCase()) ||
+        (o.requestedBy || '').toLowerCase().includes(search.toLowerCase());
       return matchStatus && matchSearch;
     });
   }, [orders, filterStatus, search]);
@@ -70,17 +122,103 @@ export default function OrdersPage() {
   }), [orders]);
 
   const handleUpdateOrder = async (updated: Order) => {
-    const { error } = await supabase.from('orders').update({
-      status: updated.status,
-      vendor_splits: updated.vendorSplits,
-      updated_at: updated.updatedAt,
-    }).eq('id', updated.id);
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: updated.status,
+          vendor_splits: updated.vendorSplits,
+          updated_at: updated.updatedAt,
+        })
+        .eq('id', updated.id);
 
-    if (error) {
-      console.error(error);
-    } else {
-      setSelectedOrder(updated);
+      if (error) {
+        console.error(error);
+        showToast('Failed to update order.');
+      } else {
+        setSelectedOrder(updated);
+        await fetchOrders();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to update order.');
+    }
+  };
+
+  const handleCreateOrder = async (draft: OrderCreateDraft) => {
+    try {
+      const payload = buildOrderInsert(draft, products);
+      const { error } = await supabase.from('orders').insert(payload);
+
+      if (error) {
+        console.error(error);
+        showToast('Failed to create order.');
+        return;
+      }
+
+      setShowCreateModal(false);
+      showToast('Order created successfully.');
       await fetchOrders();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to create order.');
+    }
+  };
+
+  const handleEditOrder = async (draft: OrderCreateDraft) => {
+    if (!editingOrder) return;
+
+    try {
+      const updates = buildOrderUpdate(draft, products);
+      const { error } = await supabase
+        .from('orders')
+        .update(updates)
+        .eq('id', editingOrder.id);
+
+      if (error) {
+        console.error(error);
+        showToast('Failed to save order.');
+        return;
+      }
+
+      setEditingOrder(null);
+      showToast('Order updated successfully.');
+      await fetchOrders();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to save order.');
+    }
+  };
+
+  const handleDeleteOrder = async (order: Order) => {
+    const ok = window.confirm(`Delete ${order.id}?`);
+    if (!ok) return;
+
+    try {
+      const { error } = await supabase.from('orders').delete().eq('id', order.id);
+
+      if (error) {
+        console.error(error);
+        showToast('Failed to delete order.');
+        return;
+      }
+
+      showToast('Order deleted.');
+      await fetchOrders();
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to delete order.');
+    }
+  };
+
+  const publicFormUrl = `${window.location.origin}/order-form`;
+
+  const handleCopyPublicForm = async () => {
+    try {
+      await navigator.clipboard.writeText(publicFormUrl);
+      showToast('Order form link copied.');
+    } catch {
+      showToast(publicFormUrl);
     }
   };
 
@@ -101,6 +239,12 @@ export default function OrdersPage() {
 
   return (
     <DashboardLayout title="Orders" subtitle="Review, accept, reject and manage multi-vendor order splits.">
+      {toast && (
+        <div className="fixed top-5 right-5 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium bg-emerald-500 text-white shadow-lg">
+          <i className="ri-check-line text-base"></i> {toast}
+        </div>
+      )}
+
       {loading && (
         <div className="flex items-center justify-center py-12 text-gray-400">
           <div className="w-8 h-8 flex items-center justify-center mr-3">
@@ -149,16 +293,30 @@ export default function OrdersPage() {
                   </button>
                 ))}
               </div>
-              <div className="relative">
-                <div className="w-4 h-4 flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2">
-                  <i className="ri-search-line text-gray-400 text-sm"></i>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative">
+                  <div className="w-4 h-4 flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2">
+                    <i className="ri-search-line text-gray-400 text-sm"></i>
+                  </div>
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search order ID or customer..."
+                    className="pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
                 </div>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search order ID or customer..."
-                  className="pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                />
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 cursor-pointer whitespace-nowrap"
+                >
+                  <i className="ri-add-line"></i> Create Order
+                </button>
+                <button
+                  onClick={handleCopyPublicForm}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer whitespace-nowrap"
+                >
+                  <i className="ri-link"></i> Public Form
+                </button>
               </div>
             </div>
 
@@ -168,7 +326,7 @@ export default function OrdersPage() {
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Order ID</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Customer</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Customer / Requester</th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Vendors</th>
                     <th className="text-right py-3 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Items</th>
                     <th className="text-right py-3 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Total</th>
@@ -189,6 +347,7 @@ export default function OrdersPage() {
                           <div>
                             <p className="font-medium text-gray-800">{order.customer}</p>
                             <p className="text-xs text-gray-400">{order.city}</p>
+                            {order.requestedBy && <p className="text-xs text-emerald-600 mt-0.5">By {order.requestedBy}</p>}
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -210,12 +369,53 @@ export default function OrdersPage() {
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 whitespace-nowrap">{order.createdAt}</td>
                         <td className="py-3 px-4">
-                          <button
-                            onClick={() => setSelectedOrder(order)}
-                            className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 cursor-pointer whitespace-nowrap transition-colors"
-                          >
-                            {order.status === 'pending' ? 'Review' : 'View'}
-                          </button>
+                          <div className="relative flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 cursor-pointer whitespace-nowrap transition-colors"
+                            >
+                              {order.status === 'pending' ? 'Review' : 'View'}
+                            </button>
+                            <button
+                              onClick={(event) => handleToggleMenu(order.id, event)}
+                              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 transition-colors cursor-pointer"
+                              title="More actions"
+                            >
+                              <i className="ri-more-2-line text-sm"></i>
+                            </button>
+                            {openMenuId === order.id && menuPosition && (
+                              <div
+                                className="fixed w-36 bg-white border border-gray-100 rounded-xl z-[60] py-1 shadow-md"
+                                style={{ left: menuPosition.left, top: menuPosition.top }}
+                                onClick={(e) => e.stopPropagation()}
+                                onMouseLeave={() => {
+                                  setOpenMenuId(null);
+                                  setMenuPosition(null);
+                                }}
+                              >
+                                <button
+                                  onClick={() => {
+                                    setEditingOrder(order);
+                                    setOpenMenuId(null);
+                                    setMenuPosition(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <i className="ri-edit-line text-gray-400"></i> Edit
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    handleDeleteOrder(order);
+                                    setOpenMenuId(null);
+                                    setMenuPosition(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                                >
+                                  <i className="ri-delete-bin-line text-red-400"></i> Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -246,6 +446,23 @@ export default function OrdersPage() {
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onUpdateOrder={handleUpdateOrder}
+        />
+      )}
+      {editingOrder && (
+        <OrderFormModal
+          products={products}
+          initialDraft={mapOrderToDraft(editingOrder)}
+          title="Edit Order"
+          submitLabel="Save Changes"
+          onClose={() => setEditingOrder(null)}
+          onSave={handleEditOrder}
+        />
+      )}
+      {showCreateModal && (
+        <OrderFormModal
+          products={products}
+          onClose={() => setShowCreateModal(false)}
+          onSave={handleCreateOrder}
         />
       )}
     </DashboardLayout>

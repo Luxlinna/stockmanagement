@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Product } from '@/mocks/inventory';
+import { supabase } from '@/lib/supabase';
 
 interface ProductFormModalProps {
   product: Product | null;
@@ -7,20 +8,58 @@ interface ProductFormModalProps {
   onSave: (data: Omit<Product, 'id' | 'status' | 'lastUpdated'> & { id?: string }) => void;
 }
 
-const categories = ['Electronics', 'Furniture', 'Accessories', 'Lighting', 'Smart Home'];
+const CATEGORY_STORAGE_KEY = 'inventory_categories';
+const DEFAULT_CATEGORIES = ['Electronics', 'Furniture', 'Accessories', 'Lighting', 'Smart Home'];
 const warehouses: ('BM Warehouse' | 'Vendor Warehouse')[] = ['BM Warehouse', 'Vendor Warehouse'];
+const productTypes = ['kg', 'pack', 'box', 'piece', 'liter', 'meter', 'bottle', 'bundle'] as const;
 
 export default function ProductFormModal({ product, onClose, onSave }: ProductFormModalProps) {
-  const [form, setForm] = useState({
+  const [imageMode, setImageMode] = useState<'file' | 'url'>('url');
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+
+  type ProductFormState = {
+  name: string;
+  sku: string;
+  category: string;
+  warehouse: 'BM Warehouse' | 'Vendor Warehouse';
+  vendor: string;
+  imageUrl: string;
+  stock: number;
+  lowStockThreshold: number;
+  price: number;
+  productType: (typeof productTypes)[number];
+};
+
+  const [form, setForm] = useState<ProductFormState>({
     name: '',
     sku: '',
     category: 'Electronics',
     warehouse: 'BM Warehouse' as 'BM Warehouse' | 'Vendor Warehouse',
     vendor: '',
+    imageUrl: '',
     stock: 0,
     lowStockThreshold: 10,
     price: 0,
+    productType: 'pack',
   });
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      const { data, error } = await supabase.from('categories').select('name').order('name', { ascending: true });
+      if (!error && data) {
+        setCategories(data.map((item) => item.name));
+      } else if (localStorage.getItem(CATEGORY_STORAGE_KEY)) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(CATEGORY_STORAGE_KEY) || '[]') as string[];
+          if (Array.isArray(parsed) && parsed.length > 0) setCategories(parsed);
+        } catch {
+          localStorage.removeItem(CATEGORY_STORAGE_KEY);
+        }
+      }
+    };
+
+    loadCategories();
+  }, []);
 
   useEffect(() => {
     if (product) {
@@ -30,9 +69,11 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
         category: product.category,
         warehouse: product.warehouse,
         vendor: product.vendor ?? '',
+        imageUrl: product.imageUrl ?? '',
         stock: product.stock,
         lowStockThreshold: product.lowStockThreshold,
         price: product.price,
+        productType: product.productType,
       });
     }
   }, [product]);
@@ -41,8 +82,24 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      [name]: name === 'stock' || name === 'lowStockThreshold' || name === 'price' ? parseFloat(value) || 0 : value,
+      [name]:
+        name === 'stock' || name === 'lowStockThreshold' || name === 'price'
+          ? parseFloat(value) || 0
+          : name === 'productType'
+          ? (value as (typeof productTypes)[number])
+          : value,
     }));
+  };
+
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((prev) => ({ ...prev, imageUrl: String(reader.result || '') }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -118,6 +175,47 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300"
               />
             </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Product Image</label>
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setImageMode('file')}
+                  className={`px-3 py-1.5 text-xs rounded-full border ${imageMode === 'file' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  Choose File
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageMode('url')}
+                  className={`px-3 py-1.5 text-xs rounded-full border ${imageMode === 'url' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  Use URL
+                </button>
+              </div>
+              {imageMode === 'file' ? (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFilePick}
+                  className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+                />
+              ) : (
+                <input
+                  name="imageUrl"
+                  value={form.imageUrl}
+                  onChange={handleChange}
+                  placeholder="https://example.com/product.jpg"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300"
+                />
+              )}
+              {form.imageUrl && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                  <img src={form.imageUrl} alt="Preview" className="w-10 h-10 rounded-md object-cover border border-gray-100" />
+                  <span>Preview</span>
+                </div>
+              )}
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Initial Stock</label>
               <input
@@ -151,6 +249,21 @@ export default function ProductFormModal({ product, onClose, onSave }: ProductFo
                 step={0.01}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300"
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Product Type</label>
+              <select
+                name="productType"
+                value={form.productType}
+                onChange={handleChange}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer"
+              >
+                {productTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="flex items-center gap-3 pt-2">

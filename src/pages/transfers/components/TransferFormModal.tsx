@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface NewTransferItem {
@@ -10,6 +10,7 @@ interface NewTransferItem {
 }
 
 interface FormData {
+  id: string;
   fromWarehouse: 'BM Warehouse' | 'Vendor Warehouse';
   toWarehouse: 'BM Warehouse' | 'Vendor Warehouse';
   reason: string;
@@ -23,14 +24,15 @@ interface TransferFormModalProps {
   onSubmit: (data: FormData) => void;
 }
 
-const emptyForm: FormData = {
+const emptyForm = (): FormData => ({
+  id: '',
   fromWarehouse: 'Vendor Warehouse',
   toWarehouse: 'BM Warehouse',
   reason: '',
   notes: '',
   expectedArrival: '',
   items: [],
-};
+});
 
 interface ProductOption {
   id: string;
@@ -41,32 +43,43 @@ interface ProductOption {
 }
 
 export default function TransferFormModal({ onClose, onSubmit }: TransferFormModalProps) {
-  const [form, setForm] = useState<FormData>(emptyForm);
+  const [form, setForm] = useState<FormData>(emptyForm());
   const [selectedProduct, setSelectedProduct] = useState('');
   const [selectedQty, setSelectedQty] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const autoTransferId = useMemo(
+    () => `TRF-${String(Math.floor(Date.now() / 1000) % 100000).padStart(5, '0')}`,
+    []
+  );
+
   useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      const { data, error } = await supabase.from('products').select('id, name, sku, stock, warehouse');
+      if (error) console.error(error);
+      else setProducts((data || []).map((p) => ({ id: p.id, name: p.name, sku: p.sku, stock: p.stock, warehouse: p.warehouse })));
+      setLoading(false);
+    };
+
     fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('products').select('id, name, sku, stock, warehouse');
-    if (error) console.error(error);
-    else setProducts((data || []).map((p) => ({ id: p.id, name: p.name, sku: p.sku, stock: p.stock, warehouse: p.warehouse })));
-    setLoading(false);
-  };
+  useEffect(() => {
+    if (!form.id) {
+      setForm((prev) => ({ ...prev, id: autoTransferId }));
+    }
+  }, [form.id, autoTransferId]);
 
   const availableProducts = products.filter(
-    (p) => p.warehouse === form.fromWarehouse && !form.items.find((i) => i.productId === p.id)
+    (p) => p.warehouse === form.fromWarehouse && p.stock > 0 && !form.items.find((i) => i.productId === p.id)
   );
 
   const addItem = () => {
     const product = products.find((p) => p.id === selectedProduct);
-    if (!product) return;
+    if (!product || selectedQty < 1) return;
     setForm((f) => ({
       ...f,
       items: [
@@ -113,6 +126,16 @@ export default function TransferFormModal({ onClose, onSubmit }: TransferFormMod
         </div>
 
         <div className="px-6 py-5 space-y-5">
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1.5">Transfer ID</label>
+            <input
+              value={form.id}
+              onChange={(e) => setForm((f) => ({ ...f, id: e.target.value }))}
+              placeholder="TRF-0001"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder-gray-400"
+            />
+          </div>
+
           {/* Warehouse selection */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -199,7 +222,7 @@ export default function TransferFormModal({ onClose, onSubmit }: TransferFormMod
                     type="number"
                     min={1}
                     value={selectedQty}
-                    onChange={(e) => setSelectedQty(Number(e.target.value))}
+                    onChange={(e) => setSelectedQty(Math.max(1, Number(e.target.value) || 1))}
                     className="w-20 border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   />
                   <button

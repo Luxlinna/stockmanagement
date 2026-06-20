@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type MouseEvent } from 'react';
 import DashboardLayout from '@/components/feature/DashboardLayout';
 import DeliveryStepTracker from './components/DeliveryStepTracker';
 import DeliveryDetailModal from './components/DeliveryDetailModal';
+import DeliveryFormModal from './components/DeliveryFormModal';
 import { deliveryRecords as initialDeliveries, DeliveryRecord, DeliveryStep } from '@/mocks/deliveries';
 
 const stepIndex: Record<DeliveryStep, number> = { prepare: 0, ready: 1, in_transit: 2, delivered: 3 };
@@ -18,8 +19,13 @@ type FilterStatus = 'all' | DeliveryStep;
 export default function DeliveriesPage() {
   const [deliveries, setDeliveries] = useState<DeliveryRecord[]>(initialDeliveries);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [filterWarehouse, setFilterWarehouse] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryRecord | null>(null);
+  const [editingDelivery, setEditingDelivery] = useState<DeliveryRecord | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -27,16 +33,36 @@ export default function DeliveriesPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const handleToggleMenu = (deliveryId: string, event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 144;
+    const menuHeight = 96;
+    const left = Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth));
+    const top = Math.max(8, Math.min(window.innerHeight - menuHeight - 8, rect.bottom + 8));
+
+    if (openMenuId === deliveryId) {
+      setOpenMenuId(null);
+      setMenuPosition(null);
+      return;
+    }
+
+    setOpenMenuId(deliveryId);
+    setMenuPosition({ left, top });
+  };
+
   const filtered = useMemo(() => {
     return deliveries.filter((d) => {
       const matchStatus = filterStatus === 'all' || d.status === filterStatus;
+      const matchWarehouse = filterWarehouse === 'all' || d.warehouse === filterWarehouse;
       const matchSearch =
         d.orderId.toLowerCase().includes(search.toLowerCase()) ||
-        d.customer.toLowerCase().includes(search.toLowerCase()) ||
-        d.trackingNumber.toLowerCase().includes(search.toLowerCase());
-      return matchStatus && matchSearch;
+        d.destination.toLowerCase().includes(search.toLowerCase()) ||
+        d.id.toLowerCase().includes(search.toLowerCase()) ||
+        (d.transfer_id || '').toLowerCase().includes(search.toLowerCase());
+      return matchStatus && matchWarehouse && matchSearch;
     });
-  }, [deliveries, filterStatus, search]);
+  }, [deliveries, filterStatus, filterWarehouse, search]);
 
   const counts = useMemo(() => ({
     all: deliveries.length,
@@ -68,13 +94,41 @@ export default function DeliveriesPage() {
     showToast(`Delivery advanced to: ${nextStep.replace('_', ' ')}`);
   };
 
-  const filterTabs: { key: FilterStatus; label: string }[] = [
+  const handleCreateDelivery = (record: DeliveryRecord) => {
+    setDeliveries((prev) => [record, ...prev]);
+    setShowCreateModal(false);
+    showToast('Delivery created successfully.');
+  };
+
+  const handleSaveDelivery = (record: DeliveryRecord) => {
+    setDeliveries((prev) => prev.map((d) => (d.id === record.id ? record : d)));
+    setEditingDelivery(null);
+    showToast('Delivery updated successfully.');
+  };
+
+  const handleDeleteDelivery = (record: DeliveryRecord) => {
+    const ok = window.confirm(`Delete ${record.id}?`);
+    if (!ok) return;
+
+    setDeliveries((prev) => prev.filter((d) => d.id !== record.id));
+    if (selectedDelivery?.id === record.id) {
+      setSelectedDelivery(null);
+    }
+    showToast('Delivery deleted.');
+  };
+
+  const statusOptions: { key: FilterStatus; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'prepare', label: 'Preparing' },
     { key: 'ready', label: 'Ready' },
     { key: 'in_transit', label: 'In Transit' },
     { key: 'delivered', label: 'Delivered' },
   ];
+
+  const availableWarehouses = useMemo(
+    () => [...new Set(deliveries.map((d) => d.warehouse))],
+    [deliveries]
+  );
 
   return (
     <DashboardLayout title="Deliveries" subtitle="Track shipments, advance delivery stages, and confirm arrivals.">
@@ -116,28 +170,50 @@ export default function DeliveriesPage() {
       <div className="bg-white rounded-2xl">
         {/* Toolbar */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 px-6 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-1 flex-wrap">
-            {filterTabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setFilterStatus(tab.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer whitespace-nowrap transition-colors ${filterStatus === tab.key ? 'bg-emerald-50 text-emerald-700' : 'text-gray-500 hover:bg-gray-50'}`}
-              >
-                {tab.label}
-                <span className="ml-1 text-gray-400">{tab.key === 'all' ? counts.all : counts[tab.key as DeliveryStep]}</span>
-              </button>
-            ))}
-          </div>
-          <div className="relative">
-            <div className="w-4 h-4 flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2">
-              <i className="ri-search-line text-gray-400 text-sm"></i>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <div className="w-4 h-4 flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2">
+                <i className="ri-search-line text-gray-400 text-sm"></i>
+              </div>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search order, customer, tracking..."
+                className="pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg w-60 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+              />
             </div>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search order, customer, tracking..."
-              className="pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg w-60 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-            />
+
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
+              className="py-2 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer text-gray-600"
+            >
+              {statusOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label} ({option.key === 'all' ? counts.all : counts[option.key as DeliveryStep]})
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterWarehouse}
+              onChange={(e) => setFilterWarehouse(e.target.value)}
+              className="py-2 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer text-gray-600"
+            >
+              <option value="all">All Warehouses</option>
+              {availableWarehouses.map((warehouse) => (
+                <option key={warehouse} value={warehouse}>{warehouse}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 cursor-pointer whitespace-nowrap"
+            >
+              <i className="ri-add-line"></i> Add Delivery
+            </button>
           </div>
         </div>
 
@@ -146,8 +222,9 @@ export default function DeliveriesPage() {
           {filtered.map((delivery) => {
             const cfg = statusConfig[delivery.status];
             const canAdvance = delivery.status !== 'delivered';
+            const totalItems = delivery.items.reduce((sum, item) => sum + item.quantity, 0);
             return (
-              <div key={delivery.id} className="border border-gray-100 rounded-xl p-4 hover:border-emerald-200 transition-all cursor-pointer group" onClick={() => setSelectedDelivery(delivery)}>
+              <div key={delivery.id} className="relative border border-gray-100 rounded-xl p-4 hover:border-emerald-200 transition-all cursor-pointer group" onClick={() => setSelectedDelivery(delivery)}>
                 {/* Card header */}
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -155,20 +232,61 @@ export default function DeliveriesPage() {
                       <span className="font-mono text-xs font-bold text-gray-800">{delivery.orderId}</span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
                     </div>
-                    <p className="text-sm font-medium text-gray-700 mt-0.5">{delivery.customer}</p>
-                    <p className="text-xs text-gray-400">{delivery.city}</p>
+                    <p className="text-sm font-medium text-gray-700 mt-0.5">{delivery.destination}</p>
+                    <p className="text-xs text-gray-400">{delivery.warehouse}</p>
                   </div>
-                  {canAdvance && (
-                    <div className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <i className="ri-arrow-right-line text-emerald-600 text-sm"></i>
-                    </div>
-                  )}
-                  {!canAdvance && (
-                    <div className="w-7 h-7 flex items-center justify-center">
-                      <i className="ri-check-double-line text-emerald-500 text-lg"></i>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {canAdvance && (
+                      <div className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-50 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i className="ri-arrow-right-line text-emerald-600 text-sm"></i>
+                      </div>
+                    )}
+                    {!canAdvance && (
+                      <div className="w-7 h-7 flex items-center justify-center">
+                        <i className="ri-check-double-line text-emerald-500 text-lg"></i>
+                      </div>
+                    )}
+                    <button
+                      onClick={(e) => handleToggleMenu(delivery.id, e)}
+                      className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-400 transition-colors cursor-pointer"
+                    >
+                      <i className="ri-more-2-line text-sm"></i>
+                    </button>
+                  </div>
                 </div>
+
+                {openMenuId === delivery.id && menuPosition && (
+                  <div
+                    className="fixed w-36 bg-white border border-gray-100 rounded-xl z-[60] py-1 shadow-md"
+                    style={{ left: menuPosition.left, top: menuPosition.top }}
+                    onMouseLeave={() => {
+                      setOpenMenuId(null);
+                      setMenuPosition(null);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => {
+                        setEditingDelivery(delivery);
+                        setOpenMenuId(null);
+                        setMenuPosition(null);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                    >
+                      <i className="ri-edit-line text-gray-400"></i> Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleDeleteDelivery(delivery);
+                        setOpenMenuId(null);
+                        setMenuPosition(null);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                    >
+                      <i className="ri-delete-bin-line text-red-400"></i> Delete
+                    </button>
+                  </div>
+                )}
 
                 {/* Step tracker */}
                 <div className="mb-4">
@@ -181,15 +299,15 @@ export default function DeliveriesPage() {
                     <div className="w-3.5 h-3.5 flex items-center justify-center">
                       <i className="ri-truck-line text-gray-400"></i>
                     </div>
-                    <span>{delivery.carrier}</span>
+                    <span>{delivery.transfer_id || delivery.orderId}</span>
                     <span className="text-gray-300">·</span>
-                    <span className="font-mono">{delivery.trackingNumber}</span>
+                    <span className="font-mono">{delivery.id}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <div className="w-3.5 h-3.5 flex items-center justify-center">
                       <i className="ri-box-3-line text-gray-400"></i>
                     </div>
-                    <span>{delivery.totalItems} item{delivery.totalItems !== 1 ? 's' : ''}</span>
+                    <span>{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
                     <span className="text-gray-300">·</span>
                     <span>{delivery.warehouse}</span>
                   </div>
@@ -232,6 +350,9 @@ export default function DeliveriesPage() {
               <i className="ri-truck-line text-4xl"></i>
             </div>
             <p className="text-sm">No deliveries match your current filter.</p>
+            <button onClick={() => { setSearch(''); setFilterStatus('all'); setFilterWarehouse('all'); }} className="mt-3 text-xs text-emerald-600 hover:underline cursor-pointer">
+              Clear filters
+            </button>
           </div>
         )}
 
@@ -246,6 +367,19 @@ export default function DeliveriesPage() {
           delivery={selectedDelivery}
           onClose={() => setSelectedDelivery(null)}
           onAdvance={handleAdvance}
+        />
+      )}
+      {showCreateModal && (
+        <DeliveryFormModal
+          onClose={() => setShowCreateModal(false)}
+          onSave={handleCreateDelivery}
+        />
+      )}
+      {editingDelivery && (
+        <DeliveryFormModal
+          delivery={editingDelivery}
+          onClose={() => setEditingDelivery(null)}
+          onSave={handleSaveDelivery}
         />
       )}
     </DashboardLayout>

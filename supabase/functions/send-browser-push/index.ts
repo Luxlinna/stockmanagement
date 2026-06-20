@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface PushSubscription {
@@ -192,7 +193,7 @@ Deno.serve(async (req) => {
         if (resp.ok) {
           sent++;
         } else {
-          const status = resp.status;
+          const { status } = resp;
           if (status === 410 || status === 404 || status === 400) {
             expiredEndpoints.push(sub.endpoint);
           }

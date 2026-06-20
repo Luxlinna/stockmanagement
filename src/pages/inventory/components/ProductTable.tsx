@@ -52,8 +52,12 @@ export default function ProductTable({ products, onEdit, onDelete, onAdjust, onV
               <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                      <i className="ri-box-3-line text-emerald-500 text-sm"></i>
+                    <div className="w-16 h-16 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0 overflow-hidden">
+                      {p.imageUrl ? (
+                        <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <i className="ri-box-3-line text-emerald-500 text-sm"></i>
+                      )}
                     </div>
                     <div>
                       <p className="font-medium text-gray-800 leading-tight">{p.name}</p>

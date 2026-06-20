@@ -3,6 +3,7 @@ import DashboardLayout from '@/components/feature/DashboardLayout';
 import { type ReturnRequest, type ReturnStatus } from '@/mocks/returns';
 import ReturnStatusBadge from './components/ReturnStatusBadge';
 import ReturnDetailModal from './components/ReturnDetailModal';
+import ReturnFormModal from './components/ReturnFormModal';
 import { supabase } from '@/lib/supabase';
 import { useCurrency } from '@/contexts/CurrencyContext';
 
@@ -58,6 +59,30 @@ function mapReturn(row: Record<string, unknown>): ReturnRequest {
   };
 }
 
+function toDbReturn(ret: ReturnRequest): Record<string, unknown> {
+  return {
+    id: ret.id,
+    order_id: ret.orderId,
+    customer: ret.customer,
+    email: ret.email,
+    phone: ret.phone,
+    status: ret.status,
+    items: ret.items,
+    total_items: ret.totalItems,
+    total_value: ret.totalValue,
+    reason: ret.reason,
+    reason_note: ret.reasonNote || null,
+    refund_method: ret.refundMethod,
+    refund_amount: ret.refundAmount,
+    warehouse: ret.warehouse,
+    assigned_to: ret.assignedTo || null,
+    inspection_notes: ret.inspectionNotes || null,
+    created_at: ret.createdAt,
+    updated_at: ret.updatedAt,
+    completed_at: ret.completedAt || null,
+  };
+}
+
 export default function ReturnsPage() {
   const { formatAmount } = useCurrency();
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
@@ -65,6 +90,9 @@ export default function ReturnsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [search, setSearch] = useState('');
   const [selectedReturn, setSelectedReturn] = useState<ReturnRequest | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editReturn, setEditReturn] = useState<ReturnRequest | null>(null);
+  const [deleteReturn, setDeleteReturn] = useState<ReturnRequest | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
@@ -138,6 +166,44 @@ export default function ReturnsPage() {
     }
   };
 
+  const handleSaveReturn = async (ret: ReturnRequest) => {
+    const nextId = ret.id || `RET-${String(
+      (returns.length > 0 ? Math.max(...returns.map((r) => Number(r.id.replace(/\D/g, '')) || 0)) : 0) + 1
+    ).padStart(4, '0')}`;
+
+    const payload = toDbReturn({ ...ret, id: nextId });
+    const request = ret.id
+      ? supabase.from('returns').update(payload).eq('id', ret.id)
+      : supabase.from('returns').insert(payload);
+
+    const { error } = await request;
+    if (error) {
+      console.error(error);
+      setSuccessMsg('Failed to save return.');
+    } else {
+      setSuccessMsg(ret.id ? 'Return updated.' : 'Return created.');
+      setShowForm(false);
+      setEditReturn(null);
+      await fetchReturns();
+    }
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  const handleDeleteReturn = async () => {
+    if (!deleteReturn) return;
+
+    const { error } = await supabase.from('returns').delete().eq('id', deleteReturn.id);
+    if (error) {
+      console.error(error);
+      setSuccessMsg('Failed to delete return.');
+    } else {
+      setSuccessMsg('Return deleted.');
+      setDeleteReturn(null);
+      await fetchReturns();
+    }
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
   const tabCount = (key: FilterTab) => key === 'all' ? returns.length : returns.filter((r) => r.status === key).length;
 
   return (
@@ -186,20 +252,6 @@ export default function ReturnsPage() {
           {/* Table Card */}
           <div className="bg-white rounded-xl border border-gray-100">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-wrap gap-3">
-              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg p-1 flex-wrap">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${activeTab === tab.key ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    {tab.label}
-                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${activeTab === tab.key ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500'}`}>
-                      {tabCount(tab.key)}
-                    </span>
-                  </button>
-                ))}
-              </div>
               <div className="relative">
                 <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
                 <input
@@ -209,6 +261,25 @@ export default function ReturnsPage() {
                   placeholder="Search returns, customer, product…"
                   className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 w-60 placeholder-gray-400"
                 />
+              </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <select
+                  value={activeTab}
+                  onChange={(e) => setActiveTab(e.target.value as FilterTab)}
+                  className="py-2 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer text-gray-600"
+                >
+                  {tabs.map((tab) => (
+                    <option key={tab.key} value={tab.key}>
+                      {tab.label} ({tabCount(tab.key)})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  <i className="ri-add-line"></i>Add Return
+                </button>
               </div>
             </div>
 
@@ -225,7 +296,7 @@ export default function ReturnsPage() {
                     <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Amount</th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Submitted</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -265,12 +336,29 @@ export default function ReturnsPage() {
                         </td>
                         <td className="px-4 py-3.5 text-gray-500 text-xs">{r.createdAt.split(' ')[0]}</td>
                         <td className="px-4 py-3.5 text-center">
-                          <button
-                            onClick={() => setSelectedReturn(r)}
-                            className="text-xs font-medium text-emerald-600 hover:text-emerald-800 hover:underline cursor-pointer whitespace-nowrap"
-                          >
-                            {['pending', 'inspecting', 'approved'].includes(r.status) ? 'Process' : 'View'}
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setSelectedReturn(r)}
+                              className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50 cursor-pointer"
+                              title={['pending', 'inspecting', 'approved'].includes(r.status) ? 'Process return' : 'View return'}
+                            >
+                              <i className={['pending', 'inspecting', 'approved'].includes(r.status) ? 'ri-play-circle-line' : 'ri-eye-line'}></i>
+                            </button>
+                            <button
+                              onClick={() => setEditReturn(r)}
+                              className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 cursor-pointer"
+                              title="Edit return"
+                            >
+                              <i className="ri-edit-line"></i>
+                            </button>
+                            <button
+                              onClick={() => setDeleteReturn(r)}
+                              className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer"
+                              title="Delete return"
+                            >
+                              <i className="ri-delete-bin-line"></i>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -291,6 +379,44 @@ export default function ReturnsPage() {
           onClose={() => setSelectedReturn(null)}
           onUpdate={handleUpdate}
         />
+      )}
+      {(showForm || editReturn) && (
+        <ReturnFormModal
+          ret={editReturn ?? undefined}
+          onClose={() => { setShowForm(false); setEditReturn(null); }}
+          onSave={handleSaveReturn}
+        />
+      )}
+      {deleteReturn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm mx-4 shadow-xl p-6">
+            <div className="flex flex-col items-center text-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+                <i className="ri-delete-bin-line text-red-500 text-xl"></i>
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Delete Return?</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  You are about to delete <span className="font-semibold text-gray-800">{deleteReturn.id}</span>. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setDeleteReturn(null)}
+                className="flex-1 py-2.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer whitespace-nowrap"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteReturn}
+                className="flex-1 py-2.5 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

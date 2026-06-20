@@ -24,6 +24,7 @@ export interface VendorSplit {
 
 export interface Order {
   id: string;
+  requestedBy?: string;
   customer: string;
   email: string;
   phone: string;

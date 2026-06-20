@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import DashboardLayout from '@/components/feature/DashboardLayout';
 import ProductTable from './components/ProductTable';
 import ProductFormModal from './components/ProductFormModal';
@@ -10,6 +10,8 @@ import { Product } from '@/mocks/inventory';
 import { StockHistoryEntry } from '@/mocks/stockHistory';
 import { supabase } from '@/lib/supabase';
 import { useCurrency } from '@/contexts/CurrencyContext';
+
+const CATEGORY_STORAGE_KEY = 'inventory_categories';
 
 type FilterStatus = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock';
 
@@ -27,9 +29,11 @@ function mapProduct(row: Record<string, unknown>): Product {
     category: row.category as string,
     warehouse: row.warehouse as 'BM Warehouse' | 'Vendor Warehouse',
     vendor: row.vendor as string | undefined,
+    imageUrl: (row.image_url as string | undefined) || (row.imageUrl as string | undefined),
     stock: row.stock as number,
     lowStockThreshold: row.low_stock_threshold as number,
     price: row.price as number,
+    productType: (row.product_type as Product['productType']) || 'pack',
     status: row.status as Product['status'],
     lastUpdated: row.last_updated as string,
   };
@@ -52,6 +56,7 @@ function mapHistory(row: Record<string, unknown>): StockHistoryEntry {
 }
 
 export default function InventoryPage() {
+  const navigate = useNavigate();
   const { formatAmount } = useCurrency();
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,6 +67,7 @@ export default function InventoryPage() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterWarehouse, setFilterWarehouse] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [categories, setCategories] = useState<string[]>(['Electronics', 'Furniture', 'Accessories', 'Lighting', 'Smart Home']);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
@@ -77,6 +83,25 @@ export default function InventoryPage() {
   };
 
   useEffect(() => {
+    const loadCategories = async () => {
+      const { data } = await supabase.from('categories').select('name').order('name', { ascending: true });
+      if (data && data.length > 0) {
+        setCategories(data.map((item) => item.name));
+        localStorage.setItem(CATEGORY_STORAGE_KEY, JSON.stringify(data.map((item) => item.name)));
+      } else {
+        const stored = localStorage.getItem(CATEGORY_STORAGE_KEY);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored) as string[];
+            if (Array.isArray(parsed) && parsed.length > 0) setCategories(parsed);
+          } catch {
+            localStorage.removeItem(CATEGORY_STORAGE_KEY);
+          }
+        }
+      }
+    };
+
+    loadCategories();
     fetchProducts();
     fetchHistory();
   }, []);
@@ -96,7 +121,7 @@ export default function InventoryPage() {
 
   const fetchProducts = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('products').select('*').order('id', { ascending: true });
+    const { data, error } = await supabase.from('products').select('*').order('last_updated', { ascending: false });
     if (error) {
       console.error(error);
       showToast('Failed to load products.', 'error');
@@ -122,7 +147,10 @@ export default function InventoryPage() {
     });
   }, [products, search, filterStatus, filterWarehouse, filterCategory]);
 
-  const categories = useMemo(() => [...new Set(products.map((p) => p.category))], [products]);
+  const availableCategories = useMemo(() => {
+    const fromProducts = [...new Set(products.map((p) => p.category))];
+    return [...new Set([ ...categories, ...fromProducts ])];
+  }, [categories, products]);
 
   const handleSaveProduct = async (data: Omit<Product, 'id' | 'status' | 'lastUpdated'> & { id?: string }) => {
     const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -135,9 +163,11 @@ export default function InventoryPage() {
         category: data.category,
         warehouse: data.warehouse,
         vendor: data.vendor || null,
+        image_url: data.imageUrl || null,
         stock: data.stock,
         low_stock_threshold: data.lowStockThreshold,
         price: data.price,
+        product_type: data.productType,
         status,
         last_updated: now,
       }).eq('id', data.id);
@@ -160,9 +190,11 @@ export default function InventoryPage() {
         category: data.category,
         warehouse: data.warehouse,
         vendor: data.vendor || null,
+        image_url: data.imageUrl || null,
         stock: data.stock,
         low_stock_threshold: data.lowStockThreshold,
         price: data.price,
+        product_type: data.productType,
         status,
         last_updated: now,
       });
@@ -305,35 +337,20 @@ export default function InventoryPage() {
           <div className="bg-white rounded-2xl">
             {/* Toolbar */}
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2 flex-wrap">
-                {(['all', 'in_stock', 'low_stock', 'out_of_stock'] as FilterStatus[]).map((s) => {
-                  const labels: Record<FilterStatus, string> = { all: 'All', in_stock: 'In Stock', low_stock: 'Low Stock', out_of_stock: 'Out of Stock' };
-                  return (
-                    <button
-                      key={s}
-                      onClick={() => setFilterStatus(s)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer whitespace-nowrap transition-colors ${filterStatus === s ? 'bg-emerald-50 text-emerald-700' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                      {labels[s]} <span className="text-gray-400 ml-1">{statusCounts[s]}</span>
-                    </button>
-                  );
-                })}
+              {/* Search */}
+              <div className="relative">
+                <div className="w-4 h-4 flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2">
+                  <i className="ri-search-line text-gray-400 text-sm"></i>
+                </div>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search name or SKU..."
+                  className="pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg w-48 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                />
               </div>
 
               <div className="flex items-center gap-3 flex-wrap">
-                {/* Search */}
-                <div className="relative">
-                  <div className="w-4 h-4 flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2">
-                    <i className="ri-search-line text-gray-400 text-sm"></i>
-                  </div>
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search name or SKU..."
-                    className="pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg w-48 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  />
-                </div>
-
                 {/* Warehouse filter */}
                 <select
                   value={filterWarehouse}
@@ -352,14 +369,33 @@ export default function InventoryPage() {
                   className="py-2 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer text-gray-600"
                 >
                   <option value="all">All Categories</option>
-                  {categories.map((c) => <option key={c}>{c}</option>)}
+                  {availableCategories.map((c) => <option key={c}>{c}</option>)}
+                </select>
+
+                {/* Status filter */}
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
+                  className="py-2 px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer text-gray-600"
+                >
+                  <option value="all">All Status ({statusCounts.all})</option>
+                  <option value="in_stock">In Stock ({statusCounts.in_stock})</option>
+                  <option value="low_stock">Low Stock ({statusCounts.low_stock})</option>
+                  <option value="out_of_stock">Out of Stock ({statusCounts.out_of_stock})</option>
                 </select>
 
                 {/* Total value badge */}
-                <div className="hidden lg:flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap">
+                {/* <div className="hidden lg:flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap">
                   <i className="ri-money-dollar-circle-line"></i>
                   {formatAmount(totalValue)}
-                </div>
+                </div> */}
+
+                <button
+                  onClick={() => navigate('/categories')}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer whitespace-nowrap"
+                >
+                  Manage Categories
+                </button>
 
                 <button
                   onClick={() => setShowAddModal(true)}
@@ -411,6 +447,7 @@ export default function InventoryPage() {
       {adjustProduct && (
         <StockAdjustModal
           product={adjustProduct}
+          history={history}
           onClose={() => setAdjustProduct(null)}
           onAdjust={handleAdjust}
         />

@@ -95,6 +95,10 @@ export default function OrderDetailModal({ order, onClose, onUpdateOrder }: Orde
         <div className="px-6 py-3 bg-gray-50/60 border-b border-gray-100 shrink-0">
           <div className="flex flex-wrap gap-6 text-sm">
             <div className="flex items-center gap-2 text-gray-500">
+              <i className="ri-user-line text-gray-400"></i>
+              <span>Requested by {order.customer}</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-500">
               <i className="ri-mail-line text-gray-400"></i>
               <span>{order.email}</span>
             </div>
