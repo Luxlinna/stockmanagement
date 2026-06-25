@@ -77,36 +77,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { subscription.unsubscribe(); };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
-  };
+  const signIn = async (email: string, password: string) =>
+    supabase.auth.signInWithPassword({ email, password }).then(({ error }) => ({ error }));
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole = 'staff', phone?: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, role } },
+      options: { data: { full_name: fullName, role, phone: phone || null } },
     });
 
     if (!error && data.user) {
-      const u = data.user as AppUser;
-      await supabase.from('profiles').upsert({
-        id: u.id,
-        email,
-        full_name: fullName,
-        role,
-        phone: phone || null,
-      }, { onConflict: 'id' });
-      await supabase.from('notification_settings').upsert({
-        user_id: u.id,
-        email_enabled: true,
-        sms_enabled: false,
-        in_app_enabled: true,
-        browser_push_enabled: true,
-        category_thresholds: { Electronics: 5, Furniture: 3, Lighting: 4, 'Smart Home': 5, Accessories: 10 },
-      }, { onConflict: 'user_id' });
-      await fetchProfile(u.id);
+      await fetchProfile(data.user.id);
     }
 
     return { error };

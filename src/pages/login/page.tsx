@@ -82,12 +82,12 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-5">
+        {/* <p className="text-center text-sm text-gray-500 mt-5">
           Don't have an account?{' '}
           <a href="/signup" className="text-emerald-600 font-medium hover:underline">
             Create account
           </a>
-        </p>
+        </p> */}
       </div>
     </div>
   );

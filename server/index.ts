@@ -7,7 +7,7 @@ import { readFileSync } from 'fs';
 import authRouter from './routes/auth';
 import apiRouter from './routes/api';
 import functionsRouter from './routes/functions';
-import { pool } from './db';
+import { databaseConfigIssue, pool } from './db';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -35,6 +35,10 @@ app.use('/api', apiRouter);
 app.use('/functions/v1', functionsRouter);
 
 app.get('/health', async (_req, res) => {
+  if (databaseConfigIssue) {
+    return res.status(503).json({ status: 'error', database: databaseConfigIssue });
+  }
+
   try {
     await pool.query('SELECT 1');
     res.json({ status: 'ok', database: 'connected' });

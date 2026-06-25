@@ -31,6 +31,35 @@ function notifyAuth(event: AuthEvent, session: Session | null) {
   authListeners.forEach(cb => cb(event, session));
 }
 
+async function readApiResponse<T = any>(response: Response): Promise<T> {
+  const text = await response.text();
+  let body: any = null;
+
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = { data: null, error: text };
+    }
+  }
+
+  if (!response.ok) {
+    const error = body?.error || response.statusText || `Request failed with status ${response.status}`;
+    return { data: null, error } as T;
+  }
+
+  return (body ?? { data: null, error: null }) as T;
+}
+
+function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<{ data: any; error: any }> {
+  return fetch(input, init)
+    .then(readApiResponse)
+    .catch((err) => ({
+      data: null,
+      error: err instanceof Error ? err.message : 'Unable to connect to API server',
+    }));
+}
+
 // ── Query Builder ────────────────────────────────────────────
 type Op = 'select' | 'insert' | 'update' | 'delete' | 'upsert';
 
@@ -117,31 +146,31 @@ class QueryBuilder {
 
     switch (this._op) {
       case 'select':
-        return fetch(`/api/${this._table}?${this.selectParams()}`, { headers: h }).then(r => r.json());
+        return apiFetch(`/api/${this._table}?${this.selectParams()}`, { headers: h });
 
       case 'insert': {
-        return fetch(`/api/${this._table}`, {
+        return apiFetch(`/api/${this._table}`, {
           method: 'POST', headers: h, body: JSON.stringify(this._payload),
-        }).then(r => r.json());
+        });
       }
 
       case 'upsert': {
         const p = new URLSearchParams();
         if (this._onConflict) p.set('onConflict', this._onConflict);
-        return fetch(`/api/${this._table}?${p}`, {
+        return apiFetch(`/api/${this._table}?${p}`, {
           method: 'POST', headers: h, body: JSON.stringify(this._payload),
-        }).then(r => r.json());
+        });
       }
 
       case 'update':
-        return fetch(`/api/${this._table}?${this.filterParams()}`, {
+        return apiFetch(`/api/${this._table}?${this.filterParams()}`, {
           method: 'PATCH', headers: h, body: JSON.stringify(this._payload),
-        }).then(r => r.json());
+        });
 
       case 'delete':
-        return fetch(`/api/${this._table}?${this.filterParams()}`, {
+        return apiFetch(`/api/${this._table}?${this.filterParams()}`, {
           method: 'DELETE', headers: h,
-        }).then(r => r.json());
+        });
     }
   }
 
@@ -167,8 +196,8 @@ const auth = {
     const token = getToken();
     if (!token) return { data: { session: null } };
     try {
-      const r = await fetch('/auth/session', { headers: { Authorization: `Bearer ${token}` } });
-      return r.json();
+      const result = await apiFetch('/auth/session', { headers: { Authorization: `Bearer ${token}` } });
+      return result.data?.session !== undefined ? result : { data: { session: null } };
     } catch {
       return { data: { session: null } };
     }
@@ -188,12 +217,11 @@ const auth = {
   },
 
   async signInWithPassword(creds: { email: string; password: string }) {
-    const r = await fetch('/auth/login', {
+    const result: { data: { session: Session; user: User } | null; error: string | null } = await apiFetch('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(creds),
     });
-    const result: { data: { session: Session; user: User } | null; error: string | null } = await r.json();
     if (result.data?.session) {
       setToken(result.data.session.access_token);
       notifyAuth('SIGNED_IN', result.data.session);
@@ -203,12 +231,11 @@ const auth = {
 
   async signUp(params: { email: string; password: string; options?: { data?: Record<string, unknown> } }) {
     const { email, password, options } = params;
-    const r = await fetch('/auth/signup', {
+    const result: { data: { session: Session; user: User } | null; error: string | null } = await apiFetch('/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, ...options?.data }),
     });
-    const result: { data: { session: Session; user: User } | null; error: string | null } = await r.json();
     if (result.data?.session) {
       setToken(result.data.session.access_token);
       notifyAuth('SIGNED_IN', result.data.session);
@@ -229,8 +256,8 @@ const auth = {
     const token = getToken();
     if (!token) return { data: { user: null } };
     try {
-      const r = await fetch('/auth/user', { headers: { Authorization: `Bearer ${token}` } });
-      return r.json();
+      const result = await apiFetch('/auth/user', { headers: { Authorization: `Bearer ${token}` } });
+      return result.data?.user !== undefined ? result : { data: { user: null } };
     } catch {
       return { data: { user: null } };
     }
@@ -241,7 +268,7 @@ const auth = {
 const functions = {
   async invoke(name: string, options?: { body?: unknown }) {
     const token = getToken();
-    const r = await fetch(`/functions/v1/${name}`, {
+    const { data, error } = await apiFetch(`/functions/v1/${name}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -249,8 +276,7 @@ const functions = {
       },
       body: JSON.stringify(options?.body ?? {}),
     });
-    const data = await r.json();
-    return { data, error: null };
+    return { data, error };
   },
 };
 

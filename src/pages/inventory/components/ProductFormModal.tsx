@@ -133,8 +133,10 @@ export default function ProductFormModal({ product, nextNum, onClose, onSave }: 
             <i className="ri-close-line text-lg"></i>
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
+
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Product Name</label>
               <input
@@ -238,6 +240,38 @@ export default function ProductFormModal({ product, nextNum, onClose, onSave }: 
                 ))}
               </select>
             </div>
+
+                        {/* Image upload */}
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">Product Image (optional)</label>
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                  {form.imageUrl ? (
+                    <img src={form.imageUrl} alt="preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <i className="ri-image-line text-gray-300 text-3xl"></i>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-100 transition-colors w-fit">
+                    <i className="ri-upload-line"></i>
+                    {form.imageUrl ? 'Change Image' : 'Upload Image'}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleFilePick} />
+                  </label>
+                  {form.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, imageUrl: undefined }))}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-500 hover:text-red-600 cursor-pointer w-fit"
+                    >
+                      <i className="ri-delete-bin-line"></i> Remove
+                    </button>
+                  )}
+                  <p className="text-xs text-gray-400">PNG, JPG, WEBP up to 5 MB</p>
+                </div>
+              </div>
+            </div>
+          </div>
           </div>
 
           {/* Sticky footer */}

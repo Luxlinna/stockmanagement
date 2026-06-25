@@ -1,0 +1,7 @@
+
+> react@0.0.0 dev:server
+> tsx watch server/index.ts
+
+Server running on port 3001 (development)
+11:50:12 AM [tsx] change in ./server\db.ts Restarting...
+cServer running on port 3001 (development)

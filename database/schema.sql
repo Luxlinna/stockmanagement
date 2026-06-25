@@ -50,13 +50,19 @@ CREATE TABLE IF NOT EXISTS products (
   category TEXT NOT NULL,
   warehouse TEXT NOT NULL,
   vendor TEXT,
+  image_url TEXT,
   stock INTEGER NOT NULL DEFAULT 0,
   low_stock_threshold INTEGER NOT NULL DEFAULT 10,
   price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  product_type TEXT NOT NULL DEFAULT 'pack',
   description TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'in_stock' CHECK (status IN ('in_stock', 'low_stock', 'out_of_stock')),
   last_updated TEXT NOT NULL DEFAULT TO_CHAR(NOW(), 'YYYY-MM-DD HH24:MI')
 );
+
+-- Add columns to existing products table (idempotent)
+ALTER TABLE products ADD COLUMN IF NOT EXISTS product_type TEXT NOT NULL DEFAULT 'pack';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- STOCK HISTORY
 CREATE TABLE IF NOT EXISTS stock_history (

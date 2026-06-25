@@ -10,34 +10,74 @@ function makeUserObj(id: string, email: string, role: string) {
   return { id, email, user_metadata: { role } };
 }
 
+async function ensureAuthTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS profiles (
+      id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      email TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'staff' CHECK (role IN ('admin', 'staff', 'viewer')),
+      phone TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_settings (
+      id TEXT PRIMARY KEY DEFAULT ('NS-' || FLOOR(EXTRACT(EPOCH FROM NOW()) * 1000)::TEXT),
+      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      email_enabled BOOLEAN NOT NULL DEFAULT true,
+      sms_enabled BOOLEAN NOT NULL DEFAULT false,
+      in_app_enabled BOOLEAN NOT NULL DEFAULT true,
+      browser_push_enabled BOOLEAN NOT NULL DEFAULT true,
+      category_thresholds JSONB NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+}
+
 // POST /auth/signup
 router.post('/signup', async (req, res) => {
   const { email, password, full_name = 'User', role = 'staff', phone } = req.body;
   if (!email || !password) {
     return res.status(400).json({ data: null, error: 'Email and password are required' });
   }
+  if (!['admin', 'staff', 'viewer'].includes(role)) {
+    return res.status(400).json({ data: null, error: 'Invalid role' });
+  }
+
+  let client: Awaited<ReturnType<typeof pool.connect>> | undefined;
   try {
+    await ensureAuthTables();
+    client = await pool.connect();
     const passwordHash = await bcrypt.hash(password, 10);
-    const countResult = await pool.query('SELECT COUNT(*) FROM users');
+
+    await client.query('BEGIN');
+    const countResult = await client.query('SELECT COUNT(*) FROM users');
     const seq = String(Number(countResult.rows[0].count) + 1).padStart(3, '0');
     const userId = `USR-${seq}`;
 
-    await pool.query('BEGIN');
-    await pool.query(
+    await client.query(
       'INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)',
       [userId, email, passwordHash]
     );
-    await pool.query(
+    await client.query(
       'INSERT INTO profiles (id, email, full_name, role, phone) VALUES ($1, $2, $3, $4, $5)',
       [userId, email, full_name, role, phone || null]
     );
-    await pool.query(
+    await client.query(
       `INSERT INTO notification_settings (user_id, email_enabled, sms_enabled, in_app_enabled, browser_push_enabled, category_thresholds)
        VALUES ($1, true, false, true, true, $2)
        ON CONFLICT (user_id) DO NOTHING`,
       [userId, JSON.stringify({ Electronics: 5, Furniture: 3, Lighting: 4, 'Smart Home': 5, Accessories: 10 })]
     );
-    await pool.query('COMMIT');
+    await client.query('COMMIT');
 
     const user = makeUserObj(userId, email, role);
     const token = jwt.sign({ id: userId, email, role }, JWT_SECRET, { expiresIn: '7d' });
@@ -45,12 +85,16 @@ router.post('/signup', async (req, res) => {
 
     res.json({ data: { user, session }, error: null });
   } catch (err: any) {
-    await pool.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch { /* ignore rollback errors */ }
+    }
     const isDuplicate = err.code === '23505';
     res.status(isDuplicate ? 409 : 500).json({
       data: null,
       error: isDuplicate ? 'Email already registered' : err.message,
     });
+  } finally {
+    client?.release();
   }
 });
 
@@ -61,6 +105,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ data: null, error: 'Email and password are required' });
   }
   try {
+    await ensureAuthTables();
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     const dbUser = result.rows[0];
 
