@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/feature/DashboardLayout';
@@ -228,9 +229,9 @@ export default function NotificationSettingsPage() {
   const handleGenerateVapid = async () => {
     setVapidLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('generate-vapid-keys', {});
+      const { data, error } = await api.functions.invoke('generate-vapid-keys', {});
       if (error || !data?.publicKey) {
-        showToast('Failed to generate VAPID keys: ' + (error?.message || 'Unknown error'), 'error');
+        showToast('Failed to generate VAPID keys: ' + (error || 'Unknown error'), 'error');
       } else {
         setVapidKeys({ publicKey: data.publicKey, privateKey: data.privateKey });
         showToast('VAPID keys generated! Copy the private key to your Supabase secrets.');
@@ -446,7 +447,7 @@ export default function NotificationSettingsPage() {
 
   const handleTestWebhook = async (wh: WebhookConfig) => {
     try {
-      const { data, error } = await supabase.functions.invoke('webhook-dispatch', {
+      const { data, error } = await api.functions.invoke('webhook-dispatch', {
         body: {
           notification: {
             id: 'test-' + Date.now(),
@@ -1176,7 +1177,7 @@ export default function NotificationSettingsPage() {
           </button>
           <button
             onClick={async () => {
-              const { data } = await supabase.functions.invoke('scheduled-dispatch', {
+              const { data } = await api.functions.invoke('scheduled-dispatch', {
                 body: {},
               });
               showToast(data?.message || 'Manual dispatch triggered');
@@ -1188,7 +1189,7 @@ export default function NotificationSettingsPage() {
           {isAdmin && (
             <button
               onClick={async () => {
-                const { data } = await supabase.functions.invoke('alert-rules-evaluator', {
+                const { data } = await api.functions.invoke('alert-rules-evaluator', {
                   body: {},
                 });
                 showToast(`Evaluated ${data?.evaluated || 0} rules, created ${data?.total_created || 0} notifications`);

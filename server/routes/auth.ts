@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db';
 import { JWT_SECRET, authenticate, AuthRequest } from '../middleware/auth';
+import { ensureRolesTable } from './roles';
 
 const router = Router();
 
@@ -23,7 +24,7 @@ async function ensureAuthTables() {
       id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       email TEXT NOT NULL,
       full_name TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'staff' CHECK (role IN ('admin', 'staff', 'viewer')),
+      role TEXT NOT NULL DEFAULT 'staff',
       phone TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -48,13 +49,15 @@ router.post('/signup', async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ data: null, error: 'Email and password are required' });
   }
-  if (!['admin', 'staff', 'viewer'].includes(role)) {
+  await ensureAuthTables();
+  await ensureRolesTable();
+  const roleCheck = await pool.query('SELECT id FROM roles WHERE id = $1', [role]);
+  if (!roleCheck.rows[0]) {
     return res.status(400).json({ data: null, error: 'Invalid role' });
   }
 
   let client: Awaited<ReturnType<typeof pool.connect>> | undefined;
   try {
-    await ensureAuthTables();
     client = await pool.connect();
     const passwordHash = await bcrypt.hash(password, 10);
 

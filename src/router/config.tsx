@@ -21,6 +21,7 @@ import NotificationSettingsPage from "../pages/notifications/settings/page";
 import NotificationHistoryPage from "../pages/notifications/history/page";
 import ReportsPage from "../pages/reports/page";
 import RequirementsPage from "../pages/requirements/page";
+import RolesPage from "../pages/roles/page";
 
 const routes: RouteObject[] = [
   {
@@ -94,6 +95,10 @@ const routes: RouteObject[] = [
   {
     path: "/requirements",
     element: <RequirementsPage />,
+  },
+  {
+    path: "/admin/roles",
+    element: <RolesPage />,
   },
   {
     path: "*",

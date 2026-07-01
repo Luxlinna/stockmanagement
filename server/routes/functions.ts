@@ -159,6 +159,15 @@ router.post('/report-summary', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// POST /functions/v1/get-vapid-public-key
+router.post('/get-vapid-public-key', (_req, res) => {
+  const publicKey = process.env.VAPID_PUBLIC_KEY || '';
+  if (!publicKey) {
+    return res.status(404).json({ error: 'VAPID_PUBLIC_KEY not configured in environment' });
+  }
+  res.json({ publicKey });
+});
+
 // POST /functions/v1/generate-vapid-keys  (admin only)
 router.post('/generate-vapid-keys', authenticate, (_req: AuthRequest, res) => {
   try {

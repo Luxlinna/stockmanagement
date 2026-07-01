@@ -7,41 +7,37 @@ type NavItem = {
   label: string;
   icon: string;
   path: string;
-  roles: UserRole[];
+  permKey: string;
 };
 
-const ALL:   UserRole[] = ['admin', 'staff', 'viewer'];
-const STAFF: UserRole[] = ['admin', 'staff'];
-const ADMIN: UserRole[] = ['admin'];
-const REPORTS: UserRole[] = ['admin', 'viewer'];
-
 const mainNavItems: NavItem[] = [
-  { label: 'Dashboard',  icon: 'ri-dashboard-3-line',     path: '/',           roles: ALL },
-  { label: 'Inventory',  icon: 'ri-archive-stack-line',   path: '/inventory',  roles: ALL },
-  { label: 'Orders',     icon: 'ri-shopping-bag-3-line',  path: '/orders',     roles: ALL },
-  { label: 'Deliveries', icon: 'ri-truck-line',           path: '/deliveries', roles: ALL },
-  { label: 'Warehouses', icon: 'ri-building-2-line',      path: '/warehouses', roles: ALL },
-  { label: 'Transfers',  icon: 'ri-swap-box-line',        path: '/transfers',  roles: STAFF },
-  { label: 'Returns',    icon: 'ri-arrow-go-back-line',   path: '/returns',    roles: STAFF },
-  { label: 'Purchases',  icon: 'ri-shopping-cart-2-line', path: '/purchases',  roles: STAFF },
-  { label: 'Promotions', icon: 'ri-price-tag-3-line',     path: '/promotions', roles: STAFF },
-  { label: 'Vendors',    icon: 'ri-store-2-line',         path: '/vendors',    roles: STAFF },
+  { label: 'Dashboard',  icon: 'ri-dashboard-3-line',     path: '/',           permKey: 'dashboard' },
+  { label: 'Inventory',  icon: 'ri-archive-stack-line',   path: '/inventory',  permKey: 'inventory' },
+  { label: 'Orders',     icon: 'ri-shopping-bag-3-line',  path: '/orders',     permKey: 'orders' },
+  { label: 'Deliveries', icon: 'ri-truck-line',           path: '/deliveries', permKey: 'deliveries' },
+  { label: 'Warehouses', icon: 'ri-building-2-line',      path: '/warehouses', permKey: 'warehouses' },
+  { label: 'Transfers',  icon: 'ri-swap-box-line',        path: '/transfers',  permKey: 'transfers' },
+  { label: 'Returns',    icon: 'ri-arrow-go-back-line',   path: '/returns',    permKey: 'returns' },
+  { label: 'Purchases',  icon: 'ri-shopping-cart-2-line', path: '/purchases',  permKey: 'purchases' },
+  { label: 'Promotions', icon: 'ri-price-tag-3-line',     path: '/promotions', permKey: 'promotions' },
+  { label: 'Vendors',    icon: 'ri-store-2-line',         path: '/vendors',    permKey: 'vendors' },
 ];
 
 const managementNavItems: NavItem[] = [
-  { label: 'Reports',      icon: 'ri-bar-chart-2-line',   path: '/reports',      roles: REPORTS },
-  { label: 'Teams',        icon: 'ri-team-line',          path: '/teams',        roles: ADMIN },
-  { label: 'Requirements', icon: 'ri-list-check-2',       path: '/requirements', roles: ADMIN },
+  { label: 'Reports',      icon: 'ri-bar-chart-2-line',  path: '/reports',      permKey: 'reports' },
+  { label: 'Teams',        icon: 'ri-team-line',         path: '/teams',        permKey: 'teams' },
+  { label: 'Requirements', icon: 'ri-list-check-2',      path: '/requirements', permKey: 'requirements' },
+  { label: 'Roles',        icon: 'ri-shield-user-line',  path: '/admin/roles',  permKey: 'roles' },
 ];
 
 const adminNavItems: NavItem[] = [
-  { label: 'Categories',   icon: 'ri-price-tag-2-line',   path: '/admin/categories', roles: ADMIN },
+  { label: 'Categories', icon: 'ri-price-tag-2-line', path: '/admin/categories', permKey: 'categories' },
 ];
 
 const notificationNavItems: NavItem[] = [
-  { label: 'History',   icon: 'ri-history-line',         path: '/notifications/history',   roles: STAFF },
-  { label: 'Analytics', icon: 'ri-bar-chart-box-line',   path: '/notifications/analytics', roles: ADMIN },
-  { label: 'Settings',  icon: 'ri-notification-3-line',  path: '/notifications/settings',  roles: STAFF },
+  { label: 'History',   icon: 'ri-history-line',        path: '/notifications/history',   permKey: 'notifications_history' },
+  { label: 'Analytics', icon: 'ri-bar-chart-box-line',  path: '/notifications/analytics', permKey: 'notifications_analytics' },
+  { label: 'Settings',  icon: 'ri-notification-3-line', path: '/notifications/settings',  permKey: 'notifications_settings' },
 ];
 
 const ROLE_META: Record<UserRole, { label: string; icon: string; cls: string }> = {
@@ -82,7 +78,7 @@ function NavItemLink({ item, onClose }: { item: NavItem; onClose?: () => void })
 }
 
 export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, canAccess } = useAuth();
   const navigate = useNavigate();
   const sidebarRef = useRef<HTMLElement>(null);
   const touchStartX = useRef<number | null>(null);
@@ -90,10 +86,10 @@ export default function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const role = (profile?.role ?? 'viewer') as UserRole;
   const roleMeta = ROLE_META[role];
 
-  const visibleMain          = mainNavItems.filter(i => i.roles.includes(role));
-  const visibleManagement    = managementNavItems.filter(i => i.roles.includes(role));
-  const visibleNotifications = notificationNavItems.filter(i => i.roles.includes(role));
-  const visibleAdmin         = adminNavItems.filter(i => i.roles.includes(role));
+  const visibleMain          = mainNavItems.filter(i => canAccess(i.permKey));
+  const visibleManagement    = managementNavItems.filter(i => canAccess(i.permKey));
+  const visibleNotifications = notificationNavItems.filter(i => canAccess(i.permKey));
+  const visibleAdmin         = adminNavItems.filter(i => canAccess(i.permKey));
 
   const handleSignOut = async () => {
     await signOut();

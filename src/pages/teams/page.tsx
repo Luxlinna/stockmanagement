@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/feature/DashboardLayout';
 
@@ -138,7 +139,7 @@ export default function TeamsPage() {
     setInviting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('invite-user', {
+      const { data, error } = await api.functions.invoke('invite-user', {
         body: {
           email: inviteForm.email,
           full_name: inviteForm.full_name,
@@ -149,7 +150,7 @@ export default function TeamsPage() {
       });
 
       if (error || !data?.success) {
-        showToast(error?.message || data?.error || 'Failed to invite user', 'error');
+        showToast(error || data?.error || 'Failed to invite user', 'error');
       } else {
         showToast('User invited successfully');
         setShowInvite(false);

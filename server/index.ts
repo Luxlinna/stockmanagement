@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
 import authRouter from './routes/auth';
 import apiRouter from './routes/api';
+import rolesRouter, { ensureRolesTable } from './routes/roles';
 import functionsRouter from './routes/functions';
 import { databaseConfigIssue, pool } from './db';
 
@@ -32,6 +33,7 @@ app.use(express.json());
 
 app.use('/auth', authRouter);
 app.use('/api', apiRouter);
+app.use('/api/roles', rolesRouter);
 app.use('/functions/v1', functionsRouter);
 
 app.get('/health', async (_req, res) => {
@@ -54,6 +56,7 @@ if (isProd) {
   app.get('*', (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
 }
 
-// Start immediately — migration runs in background so Render health check never times out
+// Start immediately — migration/table setup runs in background so Render health check never times out
 app.listen(PORT, () => console.log(`Server running on port ${PORT}${isProd ? '' : ' (development)'}`));
+ensureRolesTable().catch(err => console.error('Failed to ensure roles table:', err.message));
 if (isProd) runMigration();

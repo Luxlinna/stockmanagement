@@ -9,6 +9,7 @@ import DeleteConfirmModal from './components/DeleteConfirmModal';
 import { Product } from '@/mocks/inventory';
 import { StockHistoryEntry } from '@/mocks/stockHistory';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useCurrency } from '@/contexts/CurrencyContext';
 
 const CATEGORY_STORAGE_KEY = 'inventory_categories';
@@ -264,7 +265,7 @@ export default function InventoryPage() {
     if (newStock <= target.lowStockThreshold) {
       showToast(`Stock adjusted. Checking alert rules...`);
       try {
-        const { data: evalData } = await supabase.functions.invoke('alert-rules-evaluator', { body: {} });
+        const { data: evalData } = await api.functions.invoke('alert-rules-evaluator', { body: {} });
         if (evalData && evalData.total_created > 0) {
           showToast(`Low stock alert created! ${evalData.total_created} notification(s) generated.`);
         } else {

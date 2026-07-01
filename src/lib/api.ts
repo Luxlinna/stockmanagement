@@ -268,15 +268,21 @@ const auth = {
 const functions = {
   async invoke(name: string, options?: { body?: unknown }) {
     const token = getToken();
-    const { data, error } = await apiFetch(`/functions/v1/${name}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(options?.body ?? {}),
-    });
-    return { data, error };
+    try {
+      const res = await fetch(`/functions/v1/${name}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(options?.body ?? {}),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) return { data: null, error: body?.error || `Request failed: ${res.status}` };
+      return { data: body, error: null };
+    } catch (err) {
+      return { data: null, error: err instanceof Error ? err.message : 'Unable to connect to API server' };
+    }
   },
 };
 

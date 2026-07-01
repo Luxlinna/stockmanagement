@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useServiceWorker, urlBase64ToUint8Array } from '@/hooks/useServiceWorker';
 
 export interface Notification {
@@ -129,7 +130,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (permission !== 'granted') return false;
 
       // Fetch VAPID public key from edge function
-      const { data: vapidData, error: vapidError } = await supabase.functions.invoke('get-vapid-public-key', {});
+      const { data: vapidData, error: vapidError } = await api.functions.invoke('get-vapid-public-key', {});
       if (vapidError || !vapidData?.publicKey) {
         console.error('Failed to get VAPID key:', vapidError);
         return false;

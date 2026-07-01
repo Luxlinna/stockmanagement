@@ -6,7 +6,7 @@ import CategoryBreakdownChart from './components/CategoryBreakdownChart';
 import ReturnReasonsChart from './components/ReturnReasonsChart';
 import WarehousePerformancePanel from './components/WarehousePerformancePanel';
 import ExportMenu from './components/ExportMenu';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useCurrency } from '@/contexts/CurrencyContext';
 
 type Period = 'daily' | 'monthly' | 'yearly';
@@ -199,7 +199,7 @@ export default function ReportsPage() {
     else if (p === 'monthly') body.month = v;
     else                      body.year  = v;
     if (wh) body.warehouse = wh;
-    const { data, error: err } = await supabase.functions.invoke('report-summary', { body });
+    const { data, error: err } = await api.functions.invoke('report-summary', { body });
     if (err || !data) setError(err?.message || 'Failed to load report');
     else setSummary(data as ReportSummary);
     setLoading(false);
